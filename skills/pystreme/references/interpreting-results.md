@@ -34,10 +34,10 @@ hold-out p by default; `sort_by_pvalue(motifs)` / `summary(motifs,
 order="pvalue")` do it for lists and tables. Names keep the round prefix.
 
 
-On SP1 ChIP peaks (7232, 10 motifs) the pattern to expect from any
-sequence-specific ChIP:
+On SP1 ChEC-seq peaks (7232, 10 motifs) the pattern to expect from any
+sequence-specific factor:
 
-- **Round 1**: the ChIP'd factor's own motif, thousands of sites, huge
+- **Round 1**: the targeted factor's own motif, thousands of sites, huge
   hold-out significance, very central (log p -371).
 - **Next rounds**: co-factors and co-occurring elements (NF-Y, NRF1, AP-1,
   ATF, ETS...), hundreds to ~2000 sites, hold-out log p -10 to -80,

@@ -20,7 +20,7 @@ description: >-
 PWM refinement, hold-out significance, erasing, one motif per round — but
 batched on the GPU and called from Python, returning `Motif` objects
 instead of an HTML report. Validated head-to-head against STREME 5.5.0
-(same primary motif, 8 of 10 motifs shared on 7232 SP1 ChIP peaks; 62 s
+(same primary motif, 8 of 10 motifs shared on 7232 SP1 ChEC-seq peaks; 62 s
 on a reserved A40 vs 191 s, re-timed 2026-09-10) and against FIMO (scanner r = 1.00000). Full record
 in `BENCHMARKS.md`; site docs in `docs/` (`mkdocs serve`).
 

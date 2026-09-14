@@ -22,6 +22,7 @@ keywords:
   - motif discovery
   - STREME
   - ChIP-seq
+  - ChEC-seq
   - GPU
 references:
   - type: article

@@ -1,6 +1,6 @@
-"""Real-data smoke test: mm10 genome + a real SP1 ChIP peak set.
+"""Real-data smoke test: mm10 genome + a real SP1 peak set.
 
-Needs a real genome and an SP/KLF ChIP peak set (the checks look for the SP1
+Needs a real genome and an SP/KLF peak set, ChIP- or ChEC-seq (the checks look for the SP1
 motif), given by the PYSTREME_TEST_GENOME and PYSTREME_TEST_PEAKS environment
 variables; without them the file skips itself. This is a
 lightweight sanity check that extraction/background-fitting don't fall over
@@ -21,7 +21,7 @@ from pystreme.scanner import scan
 from pystreme.sequence_store import SequenceStore
 
 GENOME = os.environ.get("PYSTREME_TEST_GENOME", "")  # genome FASTA with .fai
-PEAKS = os.environ.get("PYSTREME_TEST_PEAKS", "")  # summit-centred SP/KLF ChIP peaks
+PEAKS = os.environ.get("PYSTREME_TEST_PEAKS", "")  # summit-centred SP/KLF peaks (ChIP- or ChEC-seq)
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 pytestmark = pytest.mark.skipif(
@@ -65,7 +65,7 @@ def test_background_fit_on_real_data(tmp_path):
 
 def test_sp1_motif_scores_above_background_on_real_sp1_peaks(tmp_path):
     """First real-motif-on-real-data check: does the scanner actually find
-    the ChIP'd factor's own motif in its own peaks?
+    the targeted factor's own motif in its own peaks?
 
     This is deliberately not the rigorous L1 (scanner-vs-FIMO) or L6
     (STREME head-to-head) validation from DESIGNDOC.md -- just a sanity
@@ -73,7 +73,7 @@ def test_sp1_motif_scores_above_background_on_real_sp1_peaks(tmp_path):
     supplied for this project. What it does check, and what held when this
     test was written: SP1 scores above the order-2 background on the large
     majority of peaks, and its best-site positions are somewhat more central
-    than KLF4's (a similar but not-the-ChIP'd-factor GC-box binder) -- in the
+    than KLF4's (a similar but not-the-targeted-factor GC-box binder) -- in the
     right direction, though only modestly above chance. Real central
     enrichment statistics are Phase 4 (§2.7) work; this test only asserts
     the robust part.
@@ -99,7 +99,7 @@ def test_sp1_motif_scores_above_background_on_real_sp1_peaks(tmp_path):
 
 def test_fit_finds_a_gc_box_de_novo_in_real_sp1_peaks(tmp_path):
     """Phase 4's `fit` on real data: with no motif given, the top de novo
-    motif in SP1 ChIP peaks should be a GC-box (SP1's own GGGGCGGGG /
+    motif in SP1 peaks should be a GC-box (SP1's own GGGGCGGGG /
     CCCCGCCCC family), significant on held-out peaks and centrally
     enriched. Kept small (1000 peaks, two widths) so it stays a quick
     check -- the full-size STREME head-to-head (L6) is

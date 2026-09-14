@@ -2,7 +2,7 @@
 
 Results of `scripts/validate_streme.py` (DESIGNDOC.md §4 L6 and L8), kept
 here rather than in scrollback. Every run below is on the first 2000 peaks
-of the SP1 ChIP set (`SP1FULL_peaks.bed`, mm10, 200 bp windows, widths
+of the SP1 ChEC-seq set (`SP1FULL_peaks.bed`, mm10, 200 bp windows, widths
 6-15, `n_motifs=3`, dinucleotide-shuffle control on both sides), run through
 `bsub` on WEXAC. STREME is MEME 5.5.0, given the *identical* FASTA that
 pystreme scanned, building its own shuffled control as pystreme does.
@@ -118,7 +118,7 @@ correctness suite runs anywhere, and at 51 s it is usable in a pinch).
 Same primary motif, four of five shared, one differing secondary on each
 side (both real TF families) -- §4 L6's "same primary motif, overlapping
 secondaries", at 1.5x STREME's speed. Central enrichment orders them as
-one would hope: the ChIP'd factor's own site far more central than any
+one would hope: the targeted factor's own site far more central than any
 co-factor.
 
 Extraction (pyfaidx, per interval) took 69 s on the GPU node for 7232

@@ -38,7 +38,7 @@ Yes, measured against the real thing -- see [Validation and benchmarks](benchmar
 
 | | pystreme | STREME 5.5.0 |
 |---|---|---|
-| 7232 SP1 ChIP peaks, 10 motifs | same primary motif, 8 of 10 shared (Tomtom) | |
+| 7232 SP1 ChEC-seq peaks, 10 motifs | same primary motif, 8 of 10 shared (Tomtom) | |
 | wall-clock, one A40 (reserved) | **62 s** | 191 s |
 | scanner vs FIMO (L1) | Pearson r = 1.00000, 99.95% identical best sites | |
 

@@ -17,7 +17,7 @@ transcription factor. About a minute for ten motifs in 7,000 peaks.
 >   MEME Suite. If you use pystreme, please cite STREME.
 > - **Written by an AI.** The code was written by Claude (Anthropic) using
 >   Claude Code. The design, the validation against STREME and FIMO on real
->   ChIP-seq data, and every decision about what counts as correct were
+>   ChEC-seq data, and every decision about what counts as correct were
 >   directed and checked by Vladimir Mindel
 >   ([@vmindel](https://github.com/vmindel)). The full
 >   validation record is in [`BENCHMARKS.md`](BENCHMARKS.md).
@@ -87,7 +87,7 @@ the results) and an API reference generated from the docstrings. On a shared clu
 
 ## Does it work?
 
-Measured against the real tools, on 7,232 SP1 ChIP-seq peaks from mouse
+Measured against the real tools, on 7,232 SP1 ChEC-seq peaks from mouse
 (200 bp, motif widths 6–15, ten motifs):
 
 | | pystreme | reference |
@@ -110,7 +110,7 @@ pytest -m gpu     # the subset that needs a CUDA device
 
 `tests/test_real_data.py` also runs on real data when you point
 `PYSTREME_TEST_GENOME` and `PYSTREME_TEST_PEAKS` at a genome and an SP/KLF
-ChIP peak set.
+peak set (ChIP- or ChEC-seq).
 
 ## Repository layout
 

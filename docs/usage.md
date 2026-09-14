@@ -118,10 +118,9 @@ saw and is what `fit` uses to accept a motif. It is `None` when there was
 no hold-out (`discover()`, or too few sequences), and then `log_pvalue` is
 all you have. Both are natural logs: `exp(m.holdout_logp)` is the p-value.
 
-`central_logp` is the second thing to look at. On ChIP-seq the bound
-factor's own motif is sharply central and co-factors much less so (on the
-SP1 set in `BENCHMARKS.md`: GC-box central log p -371, AP-1 -26); on
-ChEC-seq the effect is stronger. A motif with strong enrichment and no
+`central_logp` is the second thing to look at. The bound factor's own
+motif is usually sharply central and co-factors much less so (on the SP1
+ChEC-seq peaks in `BENCHMARKS.md`: GC-box central log p -381, AP-1 -26). A motif with strong enrichment and no
 central signal is worth a second look -- a co-occurring element, or a
 peak set whose centers are not summits.
 
@@ -158,7 +157,7 @@ peak, in genome coordinates, only where it clears the motif's threshold
 (`passing_only=False` for every peak's best window). Load it in a genome
 browser next to the peaks, or intersect it with other annotations.
 
-`plot.report(motifs, annotation=ann)` on the first 2000 SP1 ChIP peaks (the
+`plot.report(motifs, annotation=ann)` on the first 2000 SP1 ChEC-seq peaks (the
 run recorded in the benchmarks), most significant first, with the HOCOMOCO
 match in each title: the bound factor's GC-box is sharply central, the NF-Y
 co-factor less so, AP-1 barely.
