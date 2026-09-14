@@ -34,7 +34,7 @@ summary(motifs)
 
 ## Does it work?
 
-Yes, measured against the real thing -- see [Validation and benchmarks](benchmarks.md):
+Yes, measured against the real thing -- see [Validation](validation.md):
 
 | | pystreme | STREME 5.5.0 |
 |---|---|---|

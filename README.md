@@ -97,8 +97,9 @@ Measured against the real tools, on 7,232 SP1 ChEC-seq peaks from mouse
 | scanner scores vs FIMO | Pearson r = 1.00000, 99.95% identical best sites | |
 
 Run `fit` on a GPU: on a CPU it is several times slower. How these numbers
-were measured, and what changed along the way, is in
-[`BENCHMARKS.md`](BENCHMARKS.md). The design and its trade-offs are in
+were measured, and how to reproduce them, is on the
+[validation page](https://vmindel.github.io/pystreme/validation/); the full
+development log is [`BENCHMARKS.md`](BENCHMARKS.md). The design and its trade-offs are in
 [`DESIGNDOC.md`](DESIGNDOC.md).
 
 ## Tests

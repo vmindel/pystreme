@@ -29,7 +29,7 @@ nav:
   - Overview: index.md
   - Usage guide: usage.md
   - Running on a cluster: cluster.md
-  - Validation and benchmarks: benchmarks.md
+  - Validation: validation.md
   - Design document: design.md
   - API reference:
       - MotifDiscovery and Motif: api/discovery.md
