@@ -2,6 +2,7 @@
 
 [![tests](https://github.com/vmindel/pystreme/actions/workflows/tests.yml/badge.svg)](https://github.com/vmindel/pystreme/actions/workflows/tests.yml)
 [![docs](https://img.shields.io/badge/docs-vmindel.github.io%2Fpystreme-0e6b60)](https://vmindel.github.io/pystreme/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22749207.svg)](https://doi.org/10.5281/zenodo.22749207)
 
 De novo motif discovery from peak sets: the STREME algorithm, batched on a
 GPU and called from Python. Give it a BED file and a genome; get back each
@@ -128,7 +129,9 @@ implements:
 > *Bioinformatics* 37(18):2834–2840 (2021).
 > [doi:10.1093/bioinformatics/btab203](https://doi.org/10.1093/bioinformatics/btab203)
 
-and pystreme itself via [`CITATION.cff`](CITATION.cff).
+and pystreme itself: [doi:10.5281/zenodo.22749207](https://doi.org/10.5281/zenodo.22749207) (all versions;
+each release also has its own DOI on Zenodo), or see
+[`CITATION.cff`](CITATION.cff).
 
 ## License
 
