@@ -1,6 +1,7 @@
 # pystreme
 
 [![tests](https://github.com/vmindel/pystreme/actions/workflows/tests.yml/badge.svg)](https://github.com/vmindel/pystreme/actions/workflows/tests.yml)
+[![docs](https://img.shields.io/badge/docs-vmindel.github.io%2Fpystreme-0e6b60)](https://vmindel.github.io/pystreme/)
 
 De novo motif discovery from peak sets: the STREME algorithm, batched on a
 GPU and called from Python. Give it a BED file and a genome; get back each
@@ -78,8 +79,9 @@ HOCOMOCO v12 or JASPAR.
 training `log_pvalue` is optimistic by construction. `central_logp`
 measures how strongly sites pile up at the peak centre.
 
-The [usage guide](docs/usage.md) covers every argument, the controls, and
-how to read the results. On a shared cluster, see
+The documentation site, **<https://vmindel.github.io/pystreme/>**, has the
+full [usage guide](docs/usage.md) (every argument, the controls, how to read
+the results) and an API reference generated from the docstrings. On a shared cluster, see
 [running on a cluster](docs/cluster.md).
 
 ## Does it work?

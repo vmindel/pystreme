@@ -1,5 +1,6 @@
 site_name: pystreme
 site_description: GPU-batched de novo motif discovery, in-process from Python
+site_url: https://vmindel.github.io/pystreme/
 repo_url: https://github.com/vmindel/pystreme
 docs_dir: docs
 site_dir: site
