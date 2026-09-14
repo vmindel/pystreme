@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.so
+
+# Virtualenv / conda (env itself is not tracked; environment.yml + lock are)
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Test / tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Claude Code project state (session-specific, not part of the package)
+.claude/
+
+# Data / outputs — real genomes, peak sets, and benchmark logs are large and
+# machine-specific; point at them via config rather than committing them.
+/data/
+*.fa
+*.fasta
+*.fa.fai
+BENCHMARKS.md.bak
+
+# scratch cluster-job logs
+.bsub_*.log
+
+# L6/L8 validation run outputs (scripts/validate_streme.py): FASTA, STREME/Tomtom dirs
+/validation/
+
+# local scratch scripts for bsub runs (/tmp is node-local, invisible to compute nodes)
+/.scratch/
+
+# files the smoke-test notebook writes next to itself
+notebooks/smoke_peaks.bed
+notebooks/smoke_motifs.meme
+
+# mkdocs build output
+/site/
+requirements-lock.txt.new
+notebooks/smoke_sites.bed

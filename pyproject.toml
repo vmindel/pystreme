@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pystreme"
+version = "0.1.0"
+description = "GPU-batched reimplementation of STREME for de novo motif discovery, in-process from Python/Jupyter."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Vladimir Mindel" }]
+
+[project.urls]
+Homepage = "https://github.com/vmindel/pystreme"
+Issues = "https://github.com/vmindel/pystreme/issues"
+
+# Loose ranges here for `pip install .` users on any machine/CUDA version.
+# For an exact, reproducible install (including the CUDA build of torch that
+# matches this cluster's GPUs) use environment.yml + requirements-lock.txt
+# instead — see README.md.
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "torch>=2.2",
+]
+
+[project.optional-dependencies]
+# Sequence/BED extraction, dinuc-shuffle speedups, MEME-format cross-checks.
+io = ["pyfaidx>=0.7", "numba>=0.58"]
+# Result tables (pystreme.results) and logo/positional plotting (Phase 5).
+tables = ["pandas>=2.0"]
+plot = ["logomaker>=0.8", "matplotlib>=3.7", "pandas>=2.0"]
+dev = [
+    "pytest>=7.0",
+    "pytest-benchmark>=4.0",
+]
+# `mkdocs serve` / `mkdocs build` (site source in docs/, config in mkdocs.yml).
+docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5", "mkdocstrings[python]>=0.26"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pystreme"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "gpu: requires an actual CUDA device",
+]

@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: >-
+  If you use pystreme, please cite it, and cite STREME, whose algorithm it
+  reimplements (see references).
+title: pystreme
+abstract: >-
+  GPU-batched, in-process reimplementation of the STREME algorithm for de novo
+  motif discovery from peak sets. Unofficial; not affiliated with the MEME
+  Suite. Code written with Claude Code (Anthropic); design and validation by
+  the author.
+type: software
+authors:
+  - family-names: Mindel
+    given-names: Vladimir
+    alias: vmindel
+repository-code: "https://github.com/vmindel/pystreme"
+license: MIT
+version: 0.1.0
+keywords:
+  - motif discovery
+  - STREME
+  - ChIP-seq
+  - GPU
+references:
+  - type: article
+    title: "STREME: accurate and versatile sequence motif discovery"
+    authors:
+      - family-names: Bailey
+        given-names: Timothy L.
+    journal: Bioinformatics
+    volume: 37
+    issue: 18
+    start: 2834
+    end: 2840
+    year: 2021
+    doi: 10.1093/bioinformatics/btab203

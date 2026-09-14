@@ -1,0 +1,41 @@
+# Reproducible dev/runtime environment for pystreme.
+#
+# Prefer ./scripts/setup_env.sh over a bare `conda env create` here: on
+# shared clusters, packages sitting in ~/.local (pip install --user) shadow
+# a fresh env's own site-packages, which makes pip silently skip installing
+# real dependencies (it did for torch's own CUDA runtime libs when this was
+# first built) even though the plain `conda env create` command below
+# reports success. setup_env.sh sets PYTHONNOUSERSITE for the install and
+# leaves a permanent activate-time hook so this can't regress later either.
+#
+#   ./scripts/setup_env.sh
+#   conda activate pystreme        # (or: micromamba activate pystreme)
+#
+# If you use this file directly instead:
+#   PYTHONNOUSERSITE=1 conda env create -f environment.yml
+#
+# torch is pinned to the exact cu121 wheel already proven to work on this
+# cluster's GPU nodes (see requirements-lock.txt for the fully pinned
+# transitive closure, generated via `pip freeze` after a real install).
+name: pystreme
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu121
+      - torch==2.2.2+cu121
+      - numpy==1.26.4
+      - scipy>=1.11
+      - pyfaidx>=0.8
+      - numba>=0.60
+      - biopython>=1.83
+      - logomaker>=0.8
+      - matplotlib>=3.7
+      - pandas>=2.0
+      - mkdocs>=1.6,<2
+      - mkdocs-material>=9.5
+      - mkdocstrings[python]>=0.26
+      - pytest>=8.0
+      - pytest-benchmark>=4.0

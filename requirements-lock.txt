@@ -1,0 +1,87 @@
+# Full pinned dependency closure for pystreme, generated via:
+#   PYTHONNOUSERSITE=1 pip freeze --exclude-editable
+# (see scripts/setup_env.sh). Reproduces the exact pip-installed layer;
+# environment.yml's conda-forge section covers python/pip/setuptools/wheel
+# themselves, which is why they (and packaging, pulled in transitively by
+# that layer) are excluded here rather than pinned to a local build path.
+#
+# Install torch's wheel index too:
+#   pip install --extra-index-url https://download.pytorch.org/whl/cu121 -r requirements-lock.txt
+babel==2.18.0
+backrefs==8.0
+biopython==1.88
+certifi==2026.7.22
+charset-normalizer==3.5.1
+click==8.5.0
+colorama==0.4.6
+contourpy==1.3.2
+cycler==0.12.1
+exceptiongroup==1.3.1
+filelock==3.32.5
+fonttools==4.64.0
+fsspec==2026.7.0
+ghp-import==2.1.0
+griffelib==2.3.0
+idna==3.19
+importlib_metadata==9.0.1
+iniconfig==2.3.0
+Jinja2==3.1.6
+kiwisolver==1.5.1
+llvmlite==0.49.0
+logomaker==0.8.7
+Markdown==3.10.3
+MarkupSafe==3.0.3
+matplotlib==3.10.9
+mergedeep==1.3.4
+mkdocs==1.6.1
+mkdocs-autorefs==1.4.4
+mkdocs-get-deps==0.2.2
+mkdocs-material==9.7.7
+mkdocs-material-extensions==1.3.1
+mkdocstrings==1.0.6
+mkdocstrings-python==2.0.8
+mpmath==1.3.0
+networkx==3.4.2
+numba==0.67.0
+numpy==1.26.4
+nvidia-cublas-cu12==12.1.3.1
+nvidia-cuda-cupti-cu12==12.1.105
+nvidia-cuda-nvrtc-cu12==12.1.105
+nvidia-cuda-runtime-cu12==12.1.105
+nvidia-cudnn-cu12==8.9.2.26
+nvidia-cufft-cu12==11.0.2.54
+nvidia-curand-cu12==10.3.2.106
+nvidia-cusolver-cu12==11.4.5.107
+nvidia-cusparse-cu12==12.1.0.106
+nvidia-nccl-cu12==2.19.3
+nvidia-nvjitlink-cu12==12.4.127
+nvidia-nvtx-cu12==12.1.105
+paginate==0.5.7
+pandas==2.3.3
+pathspec==1.1.1
+pillow==12.3.0
+platformdirs==4.11.7
+pluggy==1.6.0
+py-cpuinfo2==10.1.1
+pyfaidx==0.9.0.4
+Pygments==2.21.0
+pymdown-extensions==11.0.2
+pyparsing==3.3.2
+pytest==9.1.1
+pytest-benchmark==5.3.0
+python-dateutil==2.9.0.post0
+pytz==2026.3.post1
+PyYAML==6.0.3
+pyyaml_env_tag==1.1
+requests==2.34.2
+scipy==1.15.3
+six==1.17.0
+sympy==1.14.0
+tomli==2.4.1
+torch==2.2.2+cu121
+triton==2.2.0
+typing_extensions==4.16.0
+tzdata==2026.3
+urllib3==2.7.0
+watchdog==6.0.0
+zipp==4.1.0
