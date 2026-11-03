@@ -183,7 +183,19 @@ def test_explicit_with_sequence_store():
     store = SequenceStore.from_sequences(_random_seqs(5, 20, seed=0))
     other = SequenceStore.from_sequences(_random_seqs(3, 20, seed=1))
     result = Explicit(other).generate(store)
-    assert result is other
+    assert result is not other  # a view: same sequences, its own background
+    assert result.codes.data_ptr() == other.codes.data_ptr()
+    other.fit_background(order=1)
+    before = other.bg_cumsum.clone()
+    Explicit(other).generate(store).fit_background(order=0)
+    torch.testing.assert_close(other.bg_cumsum, before)
+    assert other.bg_order == 1
+
+
+def test_explicit_rejects_n_per_seq_above_one():
+    store = SequenceStore.from_sequences(_random_seqs(5, 20, seed=0))
+    with pytest.raises(ValueError, match="repeat the same sequences"):
+        Explicit(_random_seqs(5, 20, seed=1)).generate(store, n_per_seq=2)
 
 
 def test_explicit_with_string_list():
