@@ -43,6 +43,9 @@ packages = ["src/pystreme"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# `slow` (the null-calibration fits, ~1 min) is skipped by default; run it with `pytest -m slow`
+addopts = "-m 'not slow'"
 markers = [
     "gpu: requires an actual CUDA device",
+    "slow: null-calibration fits, skipped unless selected with -m slow",
 ]

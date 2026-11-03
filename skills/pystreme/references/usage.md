@@ -6,11 +6,18 @@
 device="cuda", widths=range(6, 16), control="dinuc_shuffle", holdout_frac=0.1,
 revcomp=True, seed=0)`
 
-- `peaks`: BED path (columns beyond 3 ignored; 4th = name) or a list of
-  `Interval`. `genome`: indexed FASTA (`.fai` alongside) or a `pyfaidx.Fasta`.
-- Extraction is `size` bp centered on each peak's midpoint (HOMER `-size`
-  semantics). Off-chromosome, unknown-chromosome and >`max_n_frac`-N peaks
-  are dropped with one warning; `disc.store.excluded` lists them.
+- `peaks`: BED path (4th column = name) or a list of `Interval` (which can
+  carry an absolute `summit=`). `genome`: indexed FASTA (`.fai` alongside)
+  or a `pyfaidx.Fasta`.
+- Extraction is `size` bp centered on each peak (HOMER `-size` semantics):
+  on the summit for a narrowPeak file (exactly 10 columns, 10th = summit
+  offset, -1 = none), else the midpoint; `summit="midpoint"` forces the
+  midpoint. Off-chromosome, unknown-chromosome, >`max_n_frac`-N and
+  duplicate-window peaks are dropped with one warning; `disc.store.excluded`
+  lists them. Overlapping windows are kept, with a warning, and held out
+  together by `fit`.
+- Row selections (`primary_idx`, `idx`, index-array controls) accept
+  integer indices or a boolean mask over the store.
 - Alternatives: `MotifDiscovery.from_fasta(path)` (equal-length sequences),
   `MotifDiscovery.from_sequences(list_of_strings)`.
 - Genome reads are block-merged (fast); 7232 mm10 peaks extract in ~8 s.

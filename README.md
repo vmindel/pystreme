@@ -72,7 +72,8 @@ disc.to_meme(motifs, "motifs.meme")                  # for Tomtom, FIMO, HOMER
 ```
 
 Peaks should be summit-centred; `size=200` takes 200 bp around each peak
-centre. The genome must be an indexed FASTA (`.fai` alongside). Motif
+centre, which is the summit for a narrowPeak file and the midpoint
+otherwise. The genome must be an indexed FASTA (`.fai` alongside). Motif
 databases are not bundled: download one in MEME format, for example
 HOCOMOCO v12 or JASPAR.
 
@@ -107,7 +108,13 @@ development log is [`BENCHMARKS.md`](BENCHMARKS.md). The design and its trade-of
 ```bash
 pytest            # CPU only, no GPU needed
 pytest -m gpu     # the subset that needs a CUDA device
+pytest -m slow    # null-calibration fits (~1 min): are the p-values valid?
 ```
+
+`tests/test_golden.py` pins `fit`'s output on three synthetic datasets. A
+change that should not move results must pass it unchanged; one that
+should is followed by `PYSTREME_UPDATE_GOLDEN=1 pytest tests/test_golden.py`
+and a review of the fixture diff.
 
 `tests/test_real_data.py` also runs on real data when you point
 `PYSTREME_TEST_GENOME` and `PYSTREME_TEST_PEAKS` at a genome and an SP/KLF

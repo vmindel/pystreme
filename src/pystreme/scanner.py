@@ -22,7 +22,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .sequence_store import SequenceStore, window_sums_from_cumsum
+from .sequence_store import SequenceStore, as_row_index, window_sums_from_cumsum
 
 
 @dataclass
@@ -118,6 +118,8 @@ def scan(
             "store has no background model; call store.fit_background(order=...) before scan()"
         )
 
+    if idx is not None:
+        idx = as_row_index(idx, store.n_seqs, device=store.codes.device)
     codes = store.codes if idx is None else store.codes[idx]
     mask = store.mask if idx is None else store.mask[idx]
     bg_cumsum = store.bg_cumsum if idx is None else store.bg_cumsum[idx]

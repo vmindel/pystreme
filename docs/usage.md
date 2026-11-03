@@ -30,15 +30,23 @@ motifs = disc.fit(n_motifs=3)
 summary(motifs)
 ```
 
-`from_bed` takes a BED (any columns after the first three are ignored; the
-4th becomes the peak name) and an indexed FASTA (`.fai` alongside), and
-extracts `size` bp centered on each peak's midpoint -- HOMER `-size`
-semantics. Peaks that would run off a chromosome end, name an unknown
-chromosome, or are more than `max_n_frac` N are dropped with one warning;
-`disc.store.excluded` lists them with reasons. If your peaks are broad
+`from_bed` takes a BED (the 4th column becomes the peak name) and an
+indexed FASTA (`.fai` alongside), and extracts `size` bp centered on each
+peak -- HOMER `-size` semantics. The centre is the summit when the file is
+a narrowPeak (exactly 10 columns; the 10th is the summit offset from the
+start, -1 for none), and the interval midpoint otherwise or with
+`summit="midpoint"`. A pre-parsed list of `Interval` can carry `summit=`
+(an absolute coordinate). Peaks that would run off a chromosome end, name
+an unknown chromosome, or are more than `max_n_frac` N are dropped with
+one warning; so are peaks whose window is identical to an earlier one
+(reason `"duplicate"`). `disc.store.excluded` lists them with reasons.
+Windows that overlap without being identical (several MACS summits in one
+region, say) are kept with a warning: they share sequence, so `fit` keeps
+each overlapping cluster on one side of the hold-out split, but they
+still count separately in every test, so merge peaks closer than `size`
+if they are one binding event. If midpoint-centred peaks are broad
 (median width more than twice `size`) you get a warning: fixed windows
-assume the center is meaningful, so use summit-centered peaks where you
-can. `from_fasta` (equal-length sequences in a FASTA) and `from_sequences`
+assume the center is meaningful, so use summits where you can. `from_fasta` (equal-length sequences in a FASTA) and `from_sequences`
 (a list of strings) exist for sequences that did not come from a genome.
 
 ## What `fit` does and what its arguments mean
@@ -50,14 +58,14 @@ the stopping rule fires.
 
 | argument | default | meaning |
 |---|---|---|
-| `primary_idx` | all | row indices into `disc.store` that count as "primary" (e.g. one cluster of peaks); the control is built to match that subset |
+| `primary_idx` | all | row indices into `disc.store`, or a boolean mask over it, that count as "primary" (e.g. one cluster of peaks); the control is built to match that subset |
 | `n_motifs` | 3 | stop after this many *significant* motifs |
 | `pvalue_thresh` | 0.05 | a motif counts if its hold-out p-value is at most this |
 | `patience` | 3 | also stop after this many consecutive insignificant motifs |
 | `keep_insignificant` | False | return the rejected motifs too (they are erased before continuing either way, as in STREME) |
 | `widths` | 6..15 | motif widths to seed; the final width is settled per motif (see below), so this is a range to search, not a menu |
 | `control` | `"dinuc_shuffle"` | see "Controls" |
-| `holdout_frac` | 0.1 | fraction of primary (and control) held out for significance; hold-out is skipped with a warning below `min_holdout=10` sequences per side |
+| `holdout_frac` | 0.1 | fraction of primary (and control) held out for significance; primary sequences that are identical or overlap on the genome are held out together; hold-out is skipped with a warning below `min_holdout=10` sequences per side |
 | `seed` | 0 | seeds the control construction and the split; same seed, same result |
 | `n_per_width` / `n_iter` | 4 / 20 | seeds refined per width, refinement iterations per seed -- the cost knobs; STREME's own defaults are similar |
 | `bg_order` | from `from_bed` (2) | Markov order of the background model, fit on the control set |

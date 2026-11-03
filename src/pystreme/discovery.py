@@ -103,14 +103,31 @@ def _consensus(pwm: np.ndarray, weak_thresh: float = 0.4) -> str:
     return "".join(chars)
 
 
-def _holdout_split(n: int, frac: float, rng: np.random.Generator, min_holdout: int):
+def _holdout_split(n: int, frac: float, rng: np.random.Generator, min_holdout: int, groups=None):
     """Random (train_idx, holdout_idx) row split; holdout_idx is `None` when
-    `frac` is 0 or either side would be smaller than `min_holdout`."""
+    `frac` is 0 or either side would be smaller than `min_holdout`.
+
+    `groups` (one label per row, numbered 0.. in order of first row, as
+    `SequenceStore.holdout_groups` returns) keeps every group whole on one
+    side: groups are drawn in random order into the hold-out until it holds
+    at least `round(frac * n)` rows. With every row its own group this is
+    exactly the plain row permutation, same random draws included.
+    """
     n_hold = int(round(frac * n))
     if frac <= 0 or n_hold < min_holdout or n - n_hold < min_holdout:
         return np.arange(n), None
-    perm = rng.permutation(n)
-    return np.sort(perm[n_hold:]), np.sort(perm[:n_hold])
+    if groups is None:
+        groups = np.arange(n)
+    groups = np.asarray(groups)
+    n_groups = int(groups.max()) + 1 if groups.size else 0
+    perm = rng.permutation(n_groups)
+    sizes = np.bincount(groups, minlength=n_groups)
+    n_take = int(np.searchsorted(np.cumsum(sizes[perm]), n_hold)) + 1  # first prefix of groups reaching n_hold rows
+    in_holdout = np.isin(groups, perm[:n_take])
+    hold, train = np.flatnonzero(in_holdout), np.flatnonzero(~in_holdout)
+    if hold.size < min_holdout or train.size < min_holdout:
+        return np.arange(n), None
+    return train, hold
 
 
 class MotifDiscovery:
@@ -533,13 +550,18 @@ class MotifDiscovery:
         order = primary_full.bg_order
 
         rng = np.random.default_rng(seed)
-        p_train_idx, p_hold_idx = _holdout_split(primary_full.n_seqs, holdout_frac, rng, min_holdout)
+        # overlapping or identical primary sequences stay on one side of the
+        # split; control rows are shuffles or independent draws, so they don't need it
+        p_train_idx, p_hold_idx = _holdout_split(
+            primary_full.n_seqs, holdout_frac, rng, min_holdout, groups=primary_full.holdout_groups()
+        )
         c_train_idx, c_hold_idx = _holdout_split(control_full.n_seqs, holdout_frac, rng, min_holdout)
         use_holdout = p_hold_idx is not None and c_hold_idx is not None
         if holdout_frac > 0 and not use_holdout:
             warnings.warn(
                 f"fit: hold-out disabled -- holdout_frac={holdout_frac} of {primary_full.n_seqs} primary / "
-                f"{control_full.n_seqs} control sequences leaves fewer than min_holdout={min_holdout} on one side; "
+                f"{control_full.n_seqs} control sequences leaves fewer than min_holdout={min_holdout} on one side "
+                "(overlapping or identical primary sequences are kept together, which can make a split impossible); "
                 "significance is the (optimistic) training-set p-value",
                 stacklevel=2,
             )
