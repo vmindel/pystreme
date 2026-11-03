@@ -250,3 +250,31 @@ The result is under the pre-review time because the old cap still
 resolved 256 candidates per call; the median call now resolves 3. The
 graded background and its fit-once refactor (one model per round applied
 to five stores, 0.71 s -> 0.006 s per round) are inside these numbers.
+
+## CPU speed-ups, no change in results (2026-11-03)
+
+`scripts/bench_fit.py` (synthetic, 1500 x 200 bp, two planted motifs,
+widths 6-15, three rounds, `DinucShuffle(engine="python")`), one cloud CPU
+container, best of two. `tests/test_golden.py` passes unchanged after
+every step, so these are pure speed changes.
+
+| | conv (CPU default) | gather (CUDA default) |
+|---|---|---|
+| before | 24.2 s | 57.5 s |
+| after | **14.3 s** | **31.4 s** |
+
+Where it came from (conv): scanning 9.4 -> 5.2 s (per-store cached
+background with invalid windows baked in as +inf, O(N L) validity,
+forward and reverse kernels in one call, strand looked up only at the
+chosen window); seed counting 9.9 -> 4.7 s (k-mer ids built incrementally
+across widths instead of from an (N, L, w) tensor per width); the
+threshold search's lower bounds 2.5 -> 2.2 s. For gather, accumulating as
+(motifs, sequences, windows) keeps the window axis contiguous for
+everything downstream (bitwise the same scores).
+
+Not measured here: a GPU. Earlier GPU profiles put most of the time in
+per-iteration Python and device syncs, which none of this changes;
+`python scripts/bench_fit.py --device cuda --kernel gather` on a GPU node
+gives the number to record. What is left on CPU: the exact hypergeometric
+tail for the 2000 pre-ranked seed words per width (~2.7 s), conv itself
+(~1.9 s), and the threshold search (~2.2 s).

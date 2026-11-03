@@ -18,6 +18,9 @@
 | `central_logp == 0.0` with sites clearly *avoiding* the center | the test is one-sided (enrichment) | that is a real signal of flanking placement; look at `plot.positions` |
 | GC-matched control makes the SP/KLF motif disappear | composition: GC-box frequency tracks GC content | expected; see DESIGNDOC.md §2.6, report both controls |
 | `annotate` top hit has `mean_r` < 0.7 | nothing similar in the database | treat as novel/repeat; check `plot.logo` for low-complexity |
+| same `seed`, different control and results on another machine | numba installed on one, not the other: the two shuffle engines draw differently | `control=DinucShuffle(seed=..., engine="python")` (or `"numba"`) on both |
+| `ValueError: n_per_seq=2 with an explicit control would repeat the same sequences` | `n_per_seq` only multiplies generated controls | supply more control sequences |
+| `disc.scan(...)` scores changed after a `fit`/`enrichment` call (before 2026-11) | those calls overwrote `disc.store`'s background | update; they now work on a view |
 | different motifs on CPU vs GPU, or conv vs gather | fp16 storage in conv, tie-breaks | expected in flank columns / a few percent of sites, not in which motifs |
 | `mkdocs serve` fails with "mkdocstrings not installed" | docs env lacks the plugin | `pip install -r docs/requirements.txt` |
 | `ValueError: control sequences are N bp but primary sequences are M bp` | explicit/GC control extracted at a different width | re-extract the control at the primary `size`; the per-sequence tests need the same number of window starts on both sides |

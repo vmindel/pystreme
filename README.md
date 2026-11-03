@@ -125,6 +125,7 @@ peak set (ChIP- or ChEC-seq).
 - `src/pystreme/`: the package.
 - `docs/` + `mkdocs.yml`: the documentation site (`pip install -r docs/requirements.txt`, then `mkdocs serve`).
 - `scripts/validate_streme.py`, `scripts/validate_fimo.py`: the head-to-head comparisons against STREME and FIMO (need the MEME Suite).
+- `scripts/bench_fit.py`: end-to-end `fit` timing with a per-component breakdown, for checking a speed-up.
 - `notebooks/smoke_test.ipynb`: the whole flow in a notebook.
 - `skills/pystreme/`: a [Claude Code](https://claude.com/claude-code) skill that teaches an agent the API and its pitfalls (`ln -s $PWD/skills/pystreme ~/.claude/skills/pystreme`).
 
