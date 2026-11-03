@@ -83,14 +83,25 @@ widths=...)`) sets per-object defaults for the same names.
   its dinucleotide counts, N positions fixed. `control.DinucShuffle(kmer=3)`
   preserves trinucleotides instead; `n_per_seq=2` makes two shuffles per
   sequence. Compiled with numba when available (`engine="python"` forces
-  the reference implementation).
+  the reference implementation). The two engines draw different shuffles
+  from the same `seed`, so a run is reproducible only on machines that
+  agree on whether numba is installed; pass `DinucShuffle(seed=...,
+  engine=...)` explicitly when results must match across environments.
 - `control.GCMatched(pool=SequenceStore)`: sample from a pool of candidate
   regions (e.g. all accessible regions, or peaks of another factor) to
   match the primary set's GC histogram. Read `DESIGNDOC.md` §2.6 before
   using it on a GC-rich factor: it can make the true motif look weak, and
-  that is information, not a negative result.
+  that is information, not a negative result. Primary sequences in a GC
+  bin the pool has nothing in are matched from the nearest bin it does
+  have, with a warning reporting the GC gap that leaves.
 - `control.Explicit(...)`, or just a `SequenceStore`, a list of strings,
-  or an index array into `disc.store`: your own control set.
+  or an index array (or boolean mask) into `disc.store`: your own control
+  set. `n_per_seq` does not apply to it (repeating fixed sequences would
+  only add copies) and raises.
+
+`fit`, `discover` and `enrichment` score the primary set under a background
+fitted on the control, but leave `disc.store` (and its background) as it
+was: `disc.scan(...)` gives the same answer whatever ran before it.
 
 ### How a motif's width is decided
 
