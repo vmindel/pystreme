@@ -32,6 +32,39 @@ class ScanResult:
     strands: torch.Tensor  # (n_motifs, n_seqs) int8, +1 or -1
 
 
+_TIE_EPS = 1e-4  # nats; window scores closer than this are a tie, broken by rule rather than by rounding
+
+
+def _pick_best(fwd: torch.Tensor, rc: torch.Tensor | None):
+    """Best window per (sequence, motif) from per-window scores (N, M, W).
+
+    Returns `(score, position, strand)`, each (N, M). Near-ties are broken by
+    rule: the forward strand unless the reverse strand wins by more than
+    `_TIE_EPS`, then the leftmost window within `_TIE_EPS` of the best.
+    Identical windows (a site planted next to a chance copy of itself, a
+    palindrome's two strands) score the same in exact arithmetic, but the
+    background cumsum and the conv/gather kernels round differently at
+    different positions and on different CPUs, so an exact `max` lets
+    last-bit noise choose -- and the choice moves the reported site, which
+    `fit` then erases. The reported score is the chosen window's own.
+    """
+    if rc is None:
+        combined = fwd
+        strand = torch.ones_like(fwd, dtype=torch.int8)
+    else:
+        use_rc = rc > fwd + _TIE_EPS
+        combined = torch.where(use_rc, rc, fwd)
+        strand = torch.where(use_rc, torch.tensor(-1, dtype=torch.int8, device=fwd.device), torch.tensor(1, dtype=torch.int8, device=fwd.device))
+    top = combined.max(dim=2, keepdim=True).values
+    # argmax returns the first maximal index (documented), so this is the
+    # leftmost near-best window; rows with no valid window are all -inf,
+    # every entry counts as "near", and position 0 / score -inf come out
+    near = combined >= top - _TIE_EPS
+    pos = near.to(torch.uint8).argmax(dim=2)
+    score = torch.gather(combined, 2, pos.unsqueeze(2)).squeeze(2)
+    return score, pos, torch.gather(strand, 2, pos.unsqueeze(2)).squeeze(2)
+
+
 def _to_log_pwm(pwm: np.ndarray, eps: float = 1e-4) -> torch.Tensor:
     """Probability PWM (4, w) -> log-probability kernel, clipped to avoid log(0)."""
     pwm = np.clip(np.asarray(pwm, dtype=np.float64), eps, 1.0)
@@ -161,14 +194,10 @@ def scan(
             rc_log_pwms = torch.flip(log_pwms, dims=[1, 2])
             rc = _run_kernel(chosen_kernel, (codes, mask), rc_log_pwms, onehot) - bg_win.unsqueeze(1)
             rc = torch.where(valid.unsqueeze(1), rc, torch.full_like(rc, float("-inf")))
-            combined = torch.maximum(fwd, rc)
-            strand = torch.where(rc > fwd, torch.tensor(-1, dtype=torch.int8, device=device), torch.tensor(1, dtype=torch.int8, device=device))
         else:
-            combined = fwd
-            strand = torch.ones_like(combined, dtype=torch.int8)
+            rc = None
 
-        max_score, max_pos = combined.max(dim=2)  # (N, Mg)
-        max_strand = torch.gather(strand, 2, max_pos.unsqueeze(2)).squeeze(2)  # (N, Mg)
+        max_score, max_pos, max_strand = _pick_best(fwd, rc)  # each (N, Mg)
 
         for local_i, m in enumerate(m_indices):
             best_score[m] = max_score[:, local_i]
