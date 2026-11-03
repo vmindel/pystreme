@@ -33,8 +33,9 @@ transcription factor. About a minute for ten motifs in 7,000 peaks.
   motif's threshold re-tested on peaks it never saw, then its sites erased
   before the next round.
 - **Positions for free:** every site's offset from the peak centre, and a
-  central-enrichment test that tends to separate the factor you pulled down
-  from its co-factors.
+  central-enrichment test against composition-matched decoys, which
+  separates the factor you pulled down from co-factors without mistaking a
+  GC-rich motif's drift to GC-rich summits for binding.
 - **Everything in Python:** `Motif` objects, pandas tables, database
   annotation (e.g. HOCOMOCO), sequence logos, BED and MEME-format export.
   No subprocess, no HTML to parse.
@@ -78,8 +79,10 @@ databases are not bundled: download one in MEME format, for example
 HOCOMOCO v12 or JASPAR.
 
 **Quote `holdout_logp`**, the p-value re-tested on held-out peaks. The
-training `log_pvalue` is optimistic by construction. `central_logp`
-measures how strongly sites pile up at the peak centre.
+training `log_pvalue` is optimistic by construction. `decoy_central_logp`
+measures how strongly sites pile up at the peak centre beyond what the
+motif's base composition explains (`central_logp` is the same against a
+uniform null, without that control).
 
 The documentation site, **<https://vmindel.github.io/pystreme/>**, has the
 full [usage guide](docs/usage.md) (every argument, the controls, how to read

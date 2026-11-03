@@ -66,6 +66,8 @@ def summary(motifs, order: str = "round"):
                 "holdout_logp": m.holdout_logp,
                 "central_logp": m.central_logp,
                 "central_half_width": None if m.central is None else m.central.half_width,
+                "decoy_central_logp": m.decoy_central_logp,
+                "central_fold_vs_decoys": None if m.decoy_central is None else m.decoy_central.fold,
                 "threshold": m.threshold,
                 "seed": m.seed,
             }

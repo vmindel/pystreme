@@ -32,14 +32,28 @@ def test_logo_draws_information_content(motifs):
     assert ax2.get_title() == "flat"
 
 
-def test_positions_marks_the_central_window(motifs):
-    m = motifs[0]
-    ax = plot.positions(m)
-    assert "central log p" in ax.get_title()
+def _span(ax):
     spans = [p for p in ax.patches if p.get_alpha() == 0.15]
-    assert len(spans) == 1
-    x0, x1 = spans[0].get_x(), spans[0].get_x() + spans[0].get_width()
-    assert (x0, x1) == pytest.approx((-m.central.half_width, m.central.half_width))
+    assert len(spans) <= 1
+    return None if not spans else (spans[0].get_x(), spans[0].get_x() + spans[0].get_width())
+
+
+def test_positions_marks_the_composition_controlled_central_window(motifs):
+    m = motifs[0]
+    assert m.decoy_central_logp < np.log(0.05)
+    ax = plot.positions(m)
+    assert "beyond composition" in ax.get_title()
+    assert _span(ax) == pytest.approx((-m.decoy_central.half_width, m.decoy_central.half_width))
+    assert any(p.get_label() == "decoys (scaled)" for p in ax.patches)  # the decoy line is drawn
+
+
+def test_positions_falls_back_to_the_uniform_test_without_decoys(motifs):
+    from dataclasses import replace
+
+    m = replace(motifs[0], decoy_central=None, decoy_central_logp=None)
+    ax = plot.positions(m)
+    assert "central log p =" in ax.get_title() and "composition" not in ax.get_title()
+    assert _span(ax) == pytest.approx((-m.central.half_width, m.central.half_width))
 
 
 def test_positions_does_not_shade_without_central_signal(motifs):
@@ -48,9 +62,9 @@ def test_positions_does_not_shade_without_central_signal(motifs):
 
     m = motifs[0]
     flat = replace(m, central=CentralEnrichment(log_pvalue=-0.5, half_width=90.0, n_central=10, n_sites=10, expected=9.0),
-                   central_logp=-0.5)
+                   central_logp=-0.5, decoy_central_logp=-0.5)
     ax = plot.positions(flat)
-    assert not [p for p in ax.patches if p.get_alpha() == 0.15]
+    assert _span(ax) is None
 
 
 def test_report_one_row_per_motif(motifs):

@@ -15,6 +15,7 @@
 | `fit` returns `[]` | nothing significant on hold-out within `patience` rounds | `keep_insignificant=True` to inspect; check the control choice; try `discover()` for the top training motif |
 | top motif looks like a truncated core (`CCCGCCC`) or has flat flanks | width settling (`min_flank_ic`, `width_tolerance`) | it is the informative core; lower `min_flank_ic` to keep weaker flanks, or compare with `annotate` |
 | the same family appears twice (GC-box in rounds 1 and 6) | erasing removes one site per peak per pass; large families leave residue | expected; `annotate` names both the same |
+| strong `central_logp` but `decoy_central_logp` near 0 | the motif's composition matches the peak summits (GC-rich centre), and its decoys go to the centre just as much | read it as not central; `plot.positions` shows the motif following the decoy line |
 | `central_logp == 0.0` with sites clearly *avoiding* the center | the test is one-sided (enrichment) | that is a real signal of flanking placement; look at `plot.positions` |
 | GC-matched control makes the SP/KLF motif disappear | composition: GC-box frequency tracks GC content | expected; see DESIGNDOC.md §2.6, report both controls |
 | `annotate` top hit has `mean_r` < 0.7 | nothing similar in the database | treat as novel/repeat; check `plot.logo` for low-complexity |

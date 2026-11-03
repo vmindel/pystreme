@@ -4,6 +4,13 @@
    "central_half_width": 24.0,
    "central_logp": 0.0,
    "consensus": "TTGCGCAAAT",
+   "decoy_central_logp": 0.0,
+   "decoy_central_table": [
+    97,
+    99,
+    953,
+    990
+   ],
    "holdout_logp": -18.158539896686314,
    "holdout_table": [
     21,
@@ -680,6 +687,13 @@
    "central_half_width": 42.5,
    "central_logp": 0.0,
    "consensus": "TCACGTGA",
+   "decoy_central_logp": 0.0,
+   "decoy_central_table": [
+    101,
+    105,
+    953,
+    1050
+   ],
    "holdout_logp": -5.364920198697992,
    "holdout_table": [
     16,
@@ -1496,6 +1510,13 @@
    "central_half_width": 45.5,
    "central_logp": 0.0,
    "consensus": "CCCGGCCA",
+   "decoy_central_logp": 0.0,
+   "decoy_central_table": [
+    13,
+    13,
+    128,
+    130
+   ],
    "holdout_logp": 0.0,
    "holdout_table": [
     0,
@@ -2312,6 +2333,13 @@
    "central_half_width": 28.0,
    "central_logp": 0.0,
    "consensus": "GGGGGCA",
+   "decoy_central_logp": 0.0,
+   "decoy_central_table": [
+    1,
+    23,
+    2,
+    230
+   ],
    "holdout_logp": -1.086968971848666,
    "holdout_table": [
     4,
@@ -3126,6 +3154,13 @@
    "central_half_width": 3.0,
    "central_logp": -433.793401906228,
    "consensus": "GCCCCGCCCC",
+   "decoy_central_logp": -42.93597002163895,
+   "decoy_central_table": [
+    191,
+    192,
+    1454,
+    1920
+   ],
    "holdout_logp": -42.12434703588027,
    "holdout_table": [
     43,
@@ -4100,6 +4135,13 @@
    "central_half_width": 34.0,
    "central_logp": 0.0,
    "consensus": "AAATGAGTCA",
+   "decoy_central_logp": 0.0,
+   "decoy_central_table": [
+    119,
+    122,
+    1178,
+    1220
+   ],
    "holdout_logp": -16.68176944867465,
    "holdout_table": [
     21,

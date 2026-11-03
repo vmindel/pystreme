@@ -144,6 +144,10 @@ def _snapshot(name: str) -> list[dict]:
                 "holdout_table": None if h is None else list(h.table),
                 "central_logp": _float(m.central_logp),
                 "central_half_width": None if m.central is None else _float(m.central.half_width),
+                "decoy_central_logp": _float(m.decoy_central_logp),
+                "decoy_central_table": None
+                if m.decoy_central is None
+                else [m.decoy_central.n_central, m.decoy_central.n_sites, m.decoy_central.decoy_central, m.decoy_central.decoy_sites],
                 "pwm": np.round(m.pwm, 8).tolist(),
                 "positions": m.sites.positions.cpu().tolist(),
                 "strands": m.sites.strands.cpu().tolist(),
@@ -168,9 +172,9 @@ def _compare(got: list[dict], want: list[dict], scenario: str):
     assert [m["name"] for m in got] == [m["name"] for m in want], hint
     for g, w in zip(got, want):
         where = f"{hint}\n  motif {w['name']}"
-        for key in ("consensus", "seed", "width", "n_sites", "holdout_table", "positions", "strands"):
+        for key in ("consensus", "seed", "width", "n_sites", "holdout_table", "decoy_central_table", "positions", "strands"):
             assert g[key] == w[key], f"{where}: {key} differs"
-        for key in ("threshold", "log_pvalue", "holdout_logp", "central_logp", "central_half_width"):
+        for key in ("threshold", "log_pvalue", "holdout_logp", "central_logp", "central_half_width", "decoy_central_logp"):
             assert _close(g[key], w[key]), f"{where}: {key} {g[key]} != {w[key]}"
         np.testing.assert_allclose(np.array(g["pwm"]), np.array(w["pwm"]), rtol=RTOL, atol=ATOL, err_msg=where)
         bad = [i for i, (a, b) in enumerate(zip(g["scores"], w["scores"])) if not _close(a, b)]

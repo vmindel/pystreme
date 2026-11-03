@@ -8,7 +8,7 @@ fixture, not thrown away, since it's the oracle for this file for good.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 from scipy.special import betaln
@@ -334,11 +334,7 @@ def central_enrichment(offsets, n_windows: int) -> CentralEnrichment | None:
         raise ValueError("central_enrichment requires n_windows >= 1")
 
     # every window start s in [0, n_windows) has center offset s - (n_windows-1)/2
-    window_centers = np.arange(n_windows) - (n_windows - 1) / 2
-    candidate_h = np.unique(np.abs(window_centers))
-    # all-inclusive h (every window counts as central) can't be enriched; drop it when there's a choice
-    if candidate_h.size > 1:
-        candidate_h = candidate_h[:-1]
+    candidate_h, window_centers = _central_half_widths(n_windows)
 
     abs_offsets = np.abs(offsets)
     n_central = (abs_offsets[None, :] <= candidate_h[:, None] + 1e-9).sum(axis=1)
@@ -357,6 +353,114 @@ def central_enrichment(offsets, n_windows: int) -> CentralEnrichment | None:
         n_sites=int(n_sites),
         expected=float(p_null[best] * n_sites),
     )
+
+
+def _central_half_widths(n_windows: int) -> tuple[np.ndarray, np.ndarray]:
+    """Candidate half-widths for a central-window test, and every window
+    start's centre offset: each distinct |offset| a window centre can take,
+    without the all-inclusive one (it cannot be enriched) when there is a
+    choice."""
+    window_centers = np.arange(n_windows) - (n_windows - 1) / 2
+    candidate_h = np.unique(np.abs(window_centers))
+    if candidate_h.size > 1:
+        candidate_h = candidate_h[:-1]
+    return candidate_h, window_centers
+
+
+@dataclass
+class DecoyCentralEnrichment:
+    """Result of `decoy_central_enrichment`: the motif's sites against the
+    pooled sites of its decoys, at the half-width where the motif is most
+    over-represented. `log_pvalue` is Bonferroni-adjusted (natural log)
+    over the half-widths tried."""
+
+    log_pvalue: float
+    half_width: float
+    n_central: int
+    n_sites: int
+    decoy_central: int
+    decoy_sites: int
+    n_decoys: int
+    decoy_offsets: np.ndarray = field(default=None, repr=False)
+
+    @property
+    def fold(self) -> float:
+        """Central fraction of the motif's sites over that of the decoys'."""
+        decoy_frac = self.decoy_central / self.decoy_sites if self.decoy_sites else float("nan")
+        return (self.n_central / self.n_sites) / decoy_frac if decoy_frac else float("inf")
+
+
+def decoy_central_enrichment(offsets, decoy_offsets, n_windows: int, n_decoys: int = 1) -> DecoyCentralEnrichment | None:
+    """Central enrichment of a motif's sites relative to its decoys' sites.
+
+    `central_enrichment` asks whether sites pile up at the centre more than
+    a uniform placement would put them. On peak data that is the wrong
+    null for any compositionally biased motif: base composition itself
+    changes towards the summit (GC rises at the centre of most promoter and
+    CpG-island peaks), so a GC-rich motif's best sites drift centrewards
+    whether or not the factor binds them. Here the null is empirical: the
+    sites of decoy matrices with the motif's own composition (see
+    `MotifDiscovery`'s `n_decoys`), selected as strongly, on the same
+    sequences. A motif whose sites are only as central as its decoys' is
+    following composition; one that is more central than them is not.
+
+    `offsets` are the motif's site centres relative to the sequence centre,
+    `decoy_offsets` the pooled decoy site centres, `n_windows` the window
+    starts per sequence. For each candidate half-width `h` (as in
+    `central_enrichment`) the motif's and the decoys' counts within `h` are
+    compared by a one-sided Fisher test (motif more central), and the best
+    `h` is reported Bonferroni-multiplied by the number tried. Pooled decoy
+    sites from one sequence are not independent of each other, so with
+    many decoys the decoy fraction is estimated better than the test
+    assumes; with the default ten that is a small effect next to the
+    motif's own sampling error, and the calibration tests check the result.
+    Returns `None` when either side has no sites.
+    """
+    offsets = np.asarray(offsets, dtype=np.float64).reshape(-1)
+    decoy_offsets = np.asarray(decoy_offsets, dtype=np.float64).reshape(-1)
+    n_sites, decoy_sites = offsets.size, decoy_offsets.size
+    if n_sites == 0 or decoy_sites == 0:
+        return None
+    if n_windows < 1:
+        raise ValueError("decoy_central_enrichment requires n_windows >= 1")
+
+    candidate_h, _ = _central_half_widths(n_windows)
+    n_central = (np.abs(offsets)[None, :] <= candidate_h[:, None] + 1e-9).sum(axis=1)
+    decoy_central = (np.abs(decoy_offsets)[None, :] <= candidate_h[:, None] + 1e-9).sum(axis=1)
+    # draw the motif's n_sites from the pooled sites; successes are central sites
+    log_pvals = hypergeom_logsf(n_central - 1, n_sites + decoy_sites, n_central + decoy_central, n_sites)
+    log_pvals = log_pvals + np.log(candidate_h.size)
+    best = int(np.argmin(log_pvals))
+    return DecoyCentralEnrichment(
+        log_pvalue=float(min(log_pvals[best], 0.0)),
+        half_width=float(candidate_h[best]),
+        n_central=int(n_central[best]),
+        n_sites=int(n_sites),
+        decoy_central=int(decoy_central[best]),
+        decoy_sites=int(decoy_sites),
+        n_decoys=int(n_decoys),
+        decoy_offsets=decoy_offsets,
+    )
+
+
+def decoy_pwms(pwm: np.ndarray, n_decoys: int, rng: np.random.Generator) -> list[np.ndarray]:
+    """`n_decoys` column permutations of `pwm`: the same columns (so the
+    same base composition and information content) in a random order, which
+    destroys the site while keeping what composition alone would match.
+    The identity order is redrawn, unless every column is the same (then
+    nothing differs). Adjacent-column structure such as a CpG step is not
+    preserved, so a motif whose signal is mostly dinucleotide composition
+    is controlled only for its base composition."""
+    pwm = np.asarray(pwm, dtype=np.float64)
+    w = pwm.shape[1]
+    distinct = w > 1 and not np.allclose(pwm, pwm[:, :1])
+    out = []
+    for _ in range(n_decoys):
+        perm = rng.permutation(w)
+        while distinct and np.array_equal(perm, np.arange(w)):
+            perm = rng.permutation(w)
+        out.append(pwm[:, perm])
+    return out
 
 
 def optimal_threshold(scores_primary, scores_control) -> ThresholdResult:

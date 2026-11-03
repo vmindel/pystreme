@@ -7,7 +7,7 @@ the round loop is the supported surface.
 
 ::: pystreme.statistics
     options:
-      members: [optimal_threshold, enrichment_at_threshold, central_enrichment, ThresholdResult, CentralEnrichment, hypergeom_logsf, binom_logsf]
+      members: [optimal_threshold, enrichment_at_threshold, central_enrichment, decoy_central_enrichment, decoy_pwms, ThresholdResult, CentralEnrichment, DecoyCentralEnrichment, hypergeom_logsf, binom_logsf]
 
 ## `pystreme.seeds`
 

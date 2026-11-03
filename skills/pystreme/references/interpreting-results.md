@@ -17,7 +17,8 @@ Motif(1-GCCCCGCCCC, width=10, n_sites=5716, train_logp=-2485.5, holdout_logp=-28
 | `sites` | `ScanResult` for every primary peak (best score/position/strand; `-inf` = no valid window) |
 | `n_sites` | primary peaks whose best site clears `threshold` |
 | `positions` | passing-site centers relative to the peak center, bp |
-| `central_logp` / `central` | CentriMo-style central enrichment: binomial test of sites within ±h of center vs uniform, best h, Bonferroni over h. One-sided: depletion at the center shows as 0.0 |
+| `central_logp` / `central` | CentriMo-style central enrichment: binomial test of sites within ±h of center vs uniform, best h, Bonferroni over h. One-sided: depletion at the center shows as 0.0. Composition alone (GC-rich summits) can make it significant |
+| `decoy_central_logp` / `decoy_central` | central beyond composition: the larger of `central_logp` and a Fisher test of the motif's sites vs those of `n_decoys` column-shuffled copies of its PWM (same composition), best h, Bonferroni. `.fold` = central fraction over the decoys'. The one to use for "directly bound?" |
 | `intervals` | the extracted windows `sites` is indexed by (for `sites_frame`) |
 
 `exp(holdout_logp)` is the p-value. It is a raw hold-out p-value for this
@@ -49,9 +50,13 @@ sequence-specific factor:
 - **Tail** (hold-out log p above about -10): repeats (GA-rich), A-rich
   FOX-like sites, rare long motifs. Significant, but treat as leads.
 
-`central_logp` orders the list by plausibility of direct binding better
-than the enrichment p-value does. A strongly enriched but non-central
-motif is a co-occurring element or a poorly centered peak set.
+`decoy_central_logp` orders the list by plausibility of direct binding
+better than the enrichment p-value does. Prefer it to `central_logp`: in
+GC-rich peak centres a GC-rich matrix with no real sites still scores a
+strong `central_logp`, and only the decoy comparison removes that. A
+strongly enriched but non-central motif is a co-occurring element or a
+poorly centered peak set. Decoys of low-complexity motifs (G runs) partly
+match the motif, so the test is conservative there.
 
 ## Motif width
 
