@@ -12,7 +12,9 @@ default `pytest` run skips; run them with `pytest -m slow`.
 
 from __future__ import annotations
 
+import contextlib
 import warnings
+from unittest import mock
 
 import numpy as np
 import pytest
@@ -70,13 +72,13 @@ def _null_fit(run: int, duplicated: bool, row_split: bool = False):
     if duplicated:
         seqs = seqs + seqs
     store = SequenceStore.from_sequences(seqs)
-    if row_split:
-        # the old behaviour: split row by row, ignoring that rows are copies
-        store.holdout_groups = lambda: np.arange(store.n_seqs)
     disc = MotifDiscovery(
         store, widths=[6, 8], control=DinucShuffle(seed=run, engine="python"), holdout_frac=0.3, seed=run
     )
-    with warnings.catch_warnings():
+    # the old behaviour: split row by row, ignoring that rows are copies.
+    # Patched on the class, since fit works on a view of the store.
+    row_wise = mock.patch.object(SequenceStore, "holdout_groups", lambda self: np.arange(self.n_seqs))
+    with warnings.catch_warnings(), (row_wise if row_split else contextlib.nullcontext()):
         warnings.simplefilter("ignore")
         (motif,) = disc.fit(
             n_motifs=1, patience=1, keep_insignificant=True, n_per_width=2, n_iter=5, bg_order=1, kernel="conv"
