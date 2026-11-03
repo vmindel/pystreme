@@ -457,20 +457,19 @@ class Explicit:
         self.sequences = sequences
 
     def generate(self, store: SequenceStore, n_per_seq: int = 1, universe: SequenceStore | None = None) -> SequenceStore:
+        if n_per_seq != 1:
+            # repeating fixed sequences adds no information, only copies that
+            # Fisher's test would count as independent controls
+            raise ValueError(
+                f"n_per_seq={n_per_seq} with an explicit control would repeat the same sequences; "
+                "supply more control sequences instead (n_per_seq only applies to generated controls)"
+            )
         seqs = self.sequences
         if isinstance(seqs, SequenceStore):
-            base = seqs
-        elif isinstance(seqs, (list, tuple)) and seqs and isinstance(seqs[0], str):
-            base = SequenceStore.from_sequences(list(seqs), device=store.device)
-        else:
-            base = (store if universe is None else universe).subset(np.asarray(seqs).reshape(-1))
-        if n_per_seq == 1:
-            return base
-        reps = [base] * n_per_seq
-        codes_t = torch.cat([r.codes for r in reps], dim=0)
-        mask_t = torch.cat([r.mask for r in reps], dim=0)
-        intervals = [iv for r in reps for iv in r.intervals]
-        return SequenceStore(codes_t, mask_t, intervals, excluded=[], device=store.device)
+            return seqs.view()  # the caller fits a background on it; the user's own store keeps theirs
+        if isinstance(seqs, (list, tuple)) and seqs and isinstance(seqs[0], str):
+            return SequenceStore.from_sequences(list(seqs), device=store.device)
+        return (store if universe is None else universe).subset(np.asarray(seqs).reshape(-1))
 
 
 def resolve_control(

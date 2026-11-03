@@ -225,7 +225,9 @@ class MotifDiscovery:
         generated controls are built to match the `idx` subset actually
         being tested -- the two only differ when `idx` was given.
         """
-        primary_store = self.store if idx is None else self.store.subset(idx)
+        # a view, not `self.store` itself: the background applied below must
+        # not leak into later `disc.scan(...)` calls or `to_meme`
+        primary_store = self.store.view() if idx is None else self.store.subset(idx)
         order = bg_order if bg_order is not None else primary_store.bg_order
         if order is None:
             raise RuntimeError(

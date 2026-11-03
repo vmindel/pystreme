@@ -477,6 +477,25 @@ class SequenceStore:
             pairs += _overlap_pairs(self.intervals)
         return _union_find_labels(self.n_seqs, pairs)
 
+    def view(self) -> "SequenceStore":
+        """A new store over the *same* codes/mask/intervals (no copy) that
+        keeps its own background state.
+
+        For callers that need to score this store under a different
+        background without changing what its owner sees -- `fit`,
+        `discover` and `enrichment` apply a control-fitted model each call,
+        and used to do it to `MotifDiscovery.store` itself, so a later
+        `disc.scan(...)` depended on what had run before. The view starts
+        with this store's background (same tensors, not copies) until
+        `apply_background` replaces it on the view alone. Never `erase` a
+        view: that writes into the shared codes; take `subset` for a store
+        you will erase.
+        """
+        new = SequenceStore(self.codes, self.mask, self.intervals, excluded=self.excluded, device=self.device, genomic=self.genomic)
+        new.bg_cumsum, new.bg_table, new.bg_marginals = self.bg_cumsum, self.bg_table, self.bg_marginals
+        new.bg_tables, new.bg_model, new.bg_order = self.bg_tables, self.bg_model, self.bg_order
+        return new
+
     def to_strings(self) -> list[str]:
         """Decode every row back to an ACGTN string (masked/erased positions read as `N`)."""
         lut = np.array(list(_ALPHABET + "N"))
