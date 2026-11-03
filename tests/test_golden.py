@@ -208,7 +208,12 @@ def test_golden_scenarios_still_find_what_was_planted():
     assert matches(two[1]["consensus"], "TGACTCA")
     assert all(m["holdout_logp"] < math.log(0.05) for m in two)
     assert matches(golden["n_runs_order2_gather"][0]["consensus"], "CACGTG")
-    assert "TTGCGCAAAT"[1:-1] in golden["forward_only_conv"][0]["consensus"]  # forward orientation, not its RC
+    # forward orientation, not its RC, and aligned on the site: the core
+    # alone used to pass with a seed matrix shifted one base right
+    fwd = golden["forward_only_conv"][0]
+    assert fwd["consensus"] == "TTGCGCAAAT"
+    pwm = np.array(fwd["pwm"])
+    assert not np.allclose(pwm.max(axis=0), 0.8), "an unrefined seed_to_pwm matrix, not one estimated from sites"
 
 
 def test_golden_scenarios_are_deterministic():

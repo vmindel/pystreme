@@ -172,6 +172,20 @@ def refine(
     Both stores must already have a fitted background of the same order
     (§2.3's "fit on the control set" -- see `MotifDiscovery`'s callers of
     this function for how that's set up).
+
+    The result is always a matrix estimated from sites, never a seed's own
+    `seed_to_pwm` matrix: seed matrices are scanned (that is how their
+    first sites are found) but don't compete for "best". A soft seed has a
+    flat 0.96 bits in every column, so its scores grade partial matches
+    smoothly and the threshold search can slot a cut between the planted
+    sites plus a few chance near-matches in the primary set and the best
+    control score -- a training p-value no data-estimated matrix reaches,
+    won by fitting noise. Worse, its flat information profile leaves the
+    caller's flank trimming and extension (`trim_flanks`, `extend_flanks`)
+    nothing to work with, so a seed one base off the real site would be
+    reported one base off. The seed's matrix is returned only when no
+    estimated matrix was ever scored (`n_iter=1`, or no seed had a single
+    site clear its threshold).
     """
     if not seed_words:
         raise ValueError("refine() requires at least one seed word")
@@ -186,8 +200,11 @@ def refine(
     # drop out of the batch as they converge or die.
     pwms = [seed_to_pwm(word) for word in seed_words]
     active = list(range(len(seed_words)))
-    best: RefinedMotif | None = None
+    estimated = [False] * len(seed_words)  # pwms[i] re-estimated from sites at least once
+    best: RefinedMotif | None = None  # best data-estimated matrix
     best_ic = -1.0
+    best_seed: RefinedMotif | None = None  # fallback only, see docstring
+    best_seed_ic = -1.0
     for _ in range(n_iter):
         if not active:
             break
@@ -205,18 +222,20 @@ def refine(
             n_sites = int(passing_np.sum())
 
             # Ties on p-value go to the PWM with more information: once the
-            # objective saturates (see MotifDiscovery._discover_on) the
-            # data-estimated PWMs tie the soft 0.8-sharpness seed exactly (and
-            # must beat it, or the seed itself gets reported), and a PWM that
+            # objective saturates (see MotifDiscovery._discover_on) a PWM that
             # has drifted one column off the site (one flat flank, one real
             # column lost) ties the aligned one and must lose to it.
             ic = float(column_information(pwm).sum())
-            if best is None or thr.log_pvalue < best.log_pvalue or (thr.log_pvalue == best.log_pvalue and ic > best_ic):
-                best = RefinedMotif(
+            cur, cur_ic = (best, best_ic) if estimated[i] else (best_seed, best_seed_ic)
+            if cur is None or thr.log_pvalue < cur.log_pvalue or (thr.log_pvalue == cur.log_pvalue and ic > cur_ic):
+                cand = RefinedMotif(
                     pwm=pwm, seed=seed_words[i], width=width, threshold=thr.threshold, log_pvalue=thr.log_pvalue,
                     n_sites=n_sites,
                 )
-                best_ic = ic
+                if estimated[i]:
+                    best, best_ic = cand, ic
+                else:
+                    best_seed, best_seed_ic = cand, ic
 
             passing = torch.from_numpy(passing_np).to(primary_store.codes.device)
             next_pwm = _aligned_site_counts(primary_store, p_result.positions[j], p_result.strands[j], passing, width)
@@ -225,6 +244,7 @@ def refine(
             if np.allclose(next_pwm, pwm, atol=1e-6):
                 continue  # converged: the same sites re-estimate the same PWM, so nothing changes from here
             pwms[i] = next_pwm
+            estimated[i] = True
             still_active.append(i)
         active = still_active
-    return best
+    return best if best is not None else best_seed
