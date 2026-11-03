@@ -254,3 +254,48 @@ def test_scan_reports_the_first_of_two_identical_sites(kernel):
         pwm["ACGT".index(b), i] = 0.94
     res = scan([pwm], store, kernel=kernel)
     assert set(res.positions[0].tolist()) == {21}
+
+
+# --- the per-store masked-background cache ----------------------------------
+
+
+def _fresh_scan(pwm, store, kernel):
+    """The same scan on a store that has never cached anything."""
+    clone = store.subset(np.arange(store.n_seqs))
+    return scan([pwm], clone, kernel=kernel)
+
+
+@pytest.mark.parametrize("kernel", ["conv", "gather"])
+def test_cached_background_follows_erase_and_refit(kernel):
+    rng = np.random.default_rng(3)
+    store = SequenceStore.from_sequences(["".join(rng.choice(list("ACGT"), 40)) for _ in range(30)])
+    store.fit_background(order=1)
+    pwm = rng.dirichlet(np.ones(4), size=6).T
+    scan([pwm], store, kernel=kernel)  # populate the cache
+
+    first = scan([pwm], store, kernel=kernel)
+    # fit's _erase_motif path: erase, then scan again under the same (now
+    # stale) background tensor -- the cache key's tensor identity still
+    # matches, only the mask/codes version counters have moved
+    cumsum = store.bg_cumsum
+    store.erase(np.arange(10), first.positions[0][:10], 6)
+    store.bg_cumsum = cumsum
+    after = scan([pwm], store, kernel=kernel)
+    assert bool(torch.isinf(after.scores).any()) or not torch.equal(after.positions, first.positions)
+    torch.testing.assert_close(after.scores, _fresh_scan(pwm, store, kernel).scores)
+
+    store.fit_background(order=2)  # so does a new background
+    torch.testing.assert_close(scan([pwm], store, kernel=kernel).scores, _fresh_scan(pwm, store, kernel).scores)
+
+
+def test_cached_background_on_a_view_follows_its_owner_being_erased():
+    rng = np.random.default_rng(4)
+    owner = SequenceStore.from_sequences(["".join(rng.choice(list("ACGT"), 40)) for _ in range(20)])
+    owner.fit_background(order=1)
+    view = owner.view()
+    pwm = rng.dirichlet(np.ones(4), size=5).T
+    before = scan([pwm], view, kernel="gather")
+    owner.erase(np.arange(20), before.positions[0], 5)  # writes into the codes/mask the view shares
+    after = scan([pwm], view, kernel="gather")  # the view still holds its background tensor
+    assert not torch.equal(after.scores, before.scores)
+    torch.testing.assert_close(after.scores, _fresh_scan(pwm, view, "gather").scores)

@@ -48,13 +48,12 @@ def _pick_best(fwd: torch.Tensor, rc: torch.Tensor | None):
     last-bit noise choose -- and the choice moves the reported site, which
     `fit` then erases. The reported score is the chosen window's own.
     """
+    use_rc = None
     if rc is None:
         combined = fwd
-        strand = torch.ones_like(fwd, dtype=torch.int8)
     else:
         use_rc = rc > fwd + _TIE_EPS
         combined = torch.where(use_rc, rc, fwd)
-        strand = torch.where(use_rc, torch.tensor(-1, dtype=torch.int8, device=fwd.device), torch.tensor(1, dtype=torch.int8, device=fwd.device))
     top = combined.max(dim=2, keepdim=True).values
     # argmax returns the first maximal index (documented), so this is the
     # leftmost near-best window; rows with no valid window are all -inf,
@@ -62,7 +61,10 @@ def _pick_best(fwd: torch.Tensor, rc: torch.Tensor | None):
     near = combined >= top - _TIE_EPS
     pos = near.to(torch.uint8).argmax(dim=2)
     score = torch.gather(combined, 2, pos.unsqueeze(2)).squeeze(2)
-    return score, pos, torch.gather(strand, 2, pos.unsqueeze(2)).squeeze(2)
+    strand = torch.ones_like(pos, dtype=torch.int8)
+    if use_rc is not None:  # looked up at the chosen window only, not built for every window
+        strand[torch.gather(use_rc, 2, pos.unsqueeze(2)).squeeze(2)] = -1
+    return score, pos, strand
 
 
 def _to_log_pwm(pwm: np.ndarray, eps: float = 1e-4) -> torch.Tensor:
@@ -91,19 +93,21 @@ def _scan_conv(onehot: torch.Tensor, log_pwms: torch.Tensor) -> torch.Tensor:
 def _scan_gather(codes: torch.Tensor, log_pwms: torch.Tensor) -> torch.Tensor:
     """codes (N,L) uint8/long, log_pwms (M,4,w) -> (N,M,L-w+1).
 
-    score[n,m,i] = sum_j log_pwms[m, codes[n,i+j], j] -- one embedding lookup
-    per offset j, as described in DESIGNDOC.md §3.1.
+    score[n,m,i] = sum_j log_pwms[m, codes[n,i+j], j] -- one table lookup
+    per offset j, as described in DESIGNDOC.md §3.1. Accumulated as
+    (M, N, windows) so the window axis stays contiguous through the
+    permute: the max over windows that follows reads it in order.
     """
     n_motifs, _, w = log_pwms.shape
     n_seqs, length = codes.shape
     n_win = length - w + 1
-    windows = codes.long().clamp(max=3).unfold(1, w, 1)  # (N, n_win, w)
-    table = log_pwms.permute(2, 1, 0)  # (w, 4, M)
+    x = codes.long().clamp(max=3)
+    table = log_pwms.permute(2, 0, 1)  # (w, M, 4)
 
-    out = torch.zeros(n_seqs, n_win, n_motifs, dtype=log_pwms.dtype, device=codes.device)
+    out = torch.zeros(n_motifs, n_seqs, n_win, dtype=log_pwms.dtype, device=codes.device)
     for j in range(w):
-        out += F.embedding(windows[:, :, j], table[j])
-    return out.permute(0, 2, 1)  # (N, M, n_win)
+        out += table[j][:, x[:, j : j + n_win]]
+    return out.permute(1, 0, 2)  # (N, M, n_win)
 
 
 def _run_kernel(kernel: str, store_slice, log_pwms: torch.Tensor, onehot: torch.Tensor | None = None) -> torch.Tensor:
@@ -126,6 +130,41 @@ def _onehot_from_codes(codes: torch.Tensor, mask: torch.Tensor, dtype: torch.dty
     oh.scatter_(2, idx.unsqueeze(-1), 1)
     oh = oh * mask.unsqueeze(-1).to(dtype)
     return oh.permute(0, 2, 1).contiguous()  # (N, 4, L)
+
+
+def valid_windows(mask: torch.Tensor, w: int) -> torch.Tensor:
+    """(N, L) base mask -> (N, L-w+1): True where the whole window is real
+    sequence. A cumulative count of invalid bases, so O(N L) whatever `w`
+    (the `unfold(...).all()` it replaces cost O(N L w))."""
+    bad = torch.cumsum((~mask).to(torch.int32), dim=1)
+    bad = torch.cat([torch.zeros_like(bad[:, :1]), bad], dim=1)
+    return (bad[:, w:] - bad[:, : bad.shape[1] - w]) == 0
+
+
+def _masked_background(mask: torch.Tensor, bg_cumsum: torch.Tensor, w: int) -> torch.Tensor:
+    """Background window sums with +inf where a window touches an N or an
+    erased base, so `kernel - this` is -inf there with no separate mask pass."""
+    bg_win = window_sums_from_cumsum(bg_cumsum, w)
+    return torch.where(valid_windows(mask, w), bg_win, torch.full_like(bg_win, float("inf")))
+
+
+def _store_masked_background(store: SequenceStore, w: int) -> torch.Tensor:
+    """`_masked_background` for the whole store, cached on it per width.
+
+    Refinement scans the same store with new PWMs every iteration, and this
+    term depends only on the store. The cache is checked against the
+    background tensor's identity and the in-place version counters of the
+    codes and mask, so `erase`, `apply_background`, and a view whose owner
+    was erased all invalidate it without anyone having to remember to.
+    """
+    key = (store.bg_cumsum, store.mask._version, store.codes._version)
+    cache = store.__dict__.setdefault("_masked_bg_cache", {})
+    hit = cache.get(w)
+    if hit is not None and hit[0] is key[0] and hit[1:] == key[1:]:
+        return hit[3]
+    value = _masked_background(store.mask, store.bg_cumsum, w)
+    cache[w] = (*key, value)
+    return value
 
 
 def scan(
@@ -183,19 +222,16 @@ def scan(
             continue  # motif wider than the sequence: no valid window anywhere, stays -inf
 
         log_pwms = torch.stack([_to_log_pwm(pwms[m]) for m in m_indices]).to(device)  # (Mg,4,w)
-        n_win = length - w + 1
-        valid = mask.unfold(1, w, 1).all(dim=2)  # (N, n_win)
-        bg_win = window_sums_from_cumsum(bg_cumsum, w)  # (N, n_win)
+        n_group = len(m_indices)
+        # +inf on invalid windows, so the subtraction below leaves -inf there
+        bg = _store_masked_background(store, w) if idx is None else _masked_background(mask, bg_cumsum, w)
 
-        fwd = _run_kernel(chosen_kernel, (codes, mask), log_pwms, onehot) - bg_win.unsqueeze(1)
-        fwd = torch.where(valid.unsqueeze(1), fwd, torch.full_like(fwd, float("-inf")))
-
-        if revcomp:
-            rc_log_pwms = torch.flip(log_pwms, dims=[1, 2])
-            rc = _run_kernel(chosen_kernel, (codes, mask), rc_log_pwms, onehot) - bg_win.unsqueeze(1)
-            rc = torch.where(valid.unsqueeze(1), rc, torch.full_like(rc, float("-inf")))
-        else:
-            rc = None
+        # §2.4: the reverse complement is a second set of kernels in the same
+        # call, not a second pass over the sequences
+        kernels = torch.cat([log_pwms, torch.flip(log_pwms, dims=[1, 2])]) if revcomp else log_pwms
+        raw = _run_kernel(chosen_kernel, (codes, mask), kernels, onehot) - bg.unsqueeze(1)
+        fwd = raw[:, :n_group]
+        rc = raw[:, n_group:] if revcomp else None
 
         max_score, max_pos, max_strand = _pick_best(fwd, rc)  # each (N, Mg)
 

@@ -187,3 +187,35 @@ def test_top_seeds_keeps_the_observed_orientation_when_forward_only():
     forward = top_seeds(primary, control, widths=[6], n_per_width=1, revcomp=False)[6]
     assert forward[0].word == word  # forward only: the orientation actually present
     assert forward[0].primary_count >= 200
+
+
+def test_incremental_kmer_ids_match_the_per_width_reference():
+    from pystreme.seeds import _kmer_ids_by_width
+
+    rng = np.random.default_rng(4)
+    seqs = []
+    for _ in range(30):
+        s = list(rng.choice(list("ACGT"), 23))  # odd length
+        if rng.random() < 0.5:
+            start, run = int(rng.integers(0, 20)), int(rng.integers(1, 4))
+            s[start : start + run] = ["N"] * run
+        seqs.append("".join(s))
+    store = SequenceStore.from_sequences(seqs)
+    widths = [12, 1, 6, 6, 23]  # unsorted, repeated, width 1, width == length
+    got = list(_kmer_ids_by_width(store.codes, store.mask, widths, revcomp=True))
+    assert [w for w, *_ in got] == [1, 6, 12, 23]
+    for w, ids, rc, valid in got:
+        ref_ids, ref_valid = _kmer_ids(store.codes, store.mask, w)
+        torch.testing.assert_close(valid, ref_valid)
+        torch.testing.assert_close(ids[valid], ref_ids[ref_valid])
+        torch.testing.assert_close(rc[valid], _revcomp_id(ref_ids, w)[ref_valid])
+    fwd_only = list(_kmer_ids_by_width(store.codes, store.mask, [6], revcomp=False))
+    assert fwd_only[0][2] is None
+
+
+def test_top_seeds_returns_widths_in_the_order_asked():
+    rng = np.random.default_rng(0)
+    seqs = ["".join(rng.choice(list("ACGT"), 40)) for _ in range(20)]
+    p = SequenceStore.from_sequences(seqs[:10])
+    c = SequenceStore.from_sequences(seqs[10:])
+    assert list(top_seeds(p, c, [8, 6, 7])) == [8, 6, 7]
