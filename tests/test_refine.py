@@ -169,3 +169,49 @@ def test_refine_recovers_implanted_motif():
     recovered_word = "".join("ACGT"[b] for b in recovered)
     assert recovered_word in (motif, _revcomp_str(motif))
     assert result.n_sites > 80  # ~70% of 150 implants, minus some noise tolerance
+
+
+def _is_seed_matrix(pwm, words):
+    return any(pwm.shape == (4, len(w)) and np.allclose(pwm, seed_to_pwm(w)) for w in words)
+
+
+def test_refine_never_returns_an_unrefined_seed_matrix():
+    # Regression (golden `forward_only_conv`): an exact, forward-only 10-mer
+    # in half the primary sequences, seeds one base off the site. The soft
+    # 0.8-sharpness seed matrix grades partial matches, so the threshold
+    # search could slot a cut that also admits a few chance near-matches in
+    # the primary set above every control score, beat every data-estimated
+    # matrix on training p-value, and be returned as is -- shifted one base
+    # and with a flat 0.96-bit profile that flank trimming can't correct.
+    # Hits about 1 draw in 20 here; 40 draws so the test doesn't hang on one.
+    motif = "TTGCGCAAAT"
+    words = [motif[1:] + "G", motif[1:] + "C", "A" + motif[:-1]]
+    for draw in range(40):
+        rng = np.random.default_rng(draw)
+
+        def seq(plant):
+            bases = list(rng.choice(list("ACGT"), 40))
+            if plant:
+                pos = int(rng.integers(0, 40 - len(motif)))
+                bases[pos : pos + len(motif)] = list(motif)
+            return "".join(bases)
+
+        primary = SequenceStore.from_sequences([seq(i % 2 == 0) for i in range(80)])
+        control = SequenceStore.from_sequences([seq(False) for _ in range(80)])
+        primary.fit_background(order=0, source=control)
+        control.fit_background(order=0)
+
+        result = refine(words, primary, control, n_iter=5, revcomp=False, kernel="gather")
+        assert not _is_seed_matrix(result.pwm, words), f"draw {draw}: refine returned seed {result.seed}'s own matrix"
+
+
+def test_refine_falls_back_to_the_seed_matrix_when_nothing_was_estimated():
+    # n_iter=1 scores the seeds and nothing else: their matrices are all
+    # there is to return.
+    rng = np.random.default_rng(1)
+    seqs = ["".join(rng.choice(list("ACGT"), 40)) for _ in range(40)]
+    primary, control = SequenceStore.from_sequences(seqs[:20]), SequenceStore.from_sequences(seqs[20:])
+    primary.fit_background(order=0, source=control)
+    control.fit_background(order=0)
+    result = refine(["ACGTAC", "TTGACA"], primary, control, n_iter=1, revcomp=False, kernel="gather")
+    assert _is_seed_matrix(result.pwm, [result.seed])
