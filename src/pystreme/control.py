@@ -371,30 +371,33 @@ class GCMatched:
         # Two different failures, kept apart: a bin the pool *has* but has
         # run out of (the matched GC is still right, it just repeats a
         # sequence), and a bin the pool has *nothing* in (no GC match is
-        # possible at all, and the substitute is drawn from the whole pool
-        # -- which is not GC matching, so it gets its own warning with the
-        # mismatch it actually produced).
+        # possible at all, so the substitute comes from the nearest bin the
+        # pool does have -- the closest available GC, but not a match, so it
+        # gets its own warning with the mismatch it actually produced).
+        occupied = np.array(sorted(pool_by_bin), dtype=np.int64)
+        if occupied.size == 0:
+            raise ValueError("GCMatched: the pool has no sequences")
+        source_bin: dict[int, int] = {}
+        for b in np.unique(primary_bins).tolist():
+            if b in pool_by_bin:
+                source_bin[b] = b
+            else:
+                source_bin[b] = int(occupied[np.argmin(np.abs(occupied - b))])  # ties go to the lower bin
         exhausted_bins: set[int] = set()
-        empty_bins: set[int] = set()
+        empty_bins = {b for b, src in source_bin.items() if src != b}
         chosen: list[int] = []
         for _ in range(n_per_seq):
-            for b in primary_bins:
-                b = int(b)
-                candidates = pool_by_bin.get(b)
-                if not candidates:
-                    empty_bins.add(b)
-                    fallback_pool = [i for indices in pool_by_bin.values() for i in indices] or list(
-                        range(self.pool.n_seqs)
-                    )
-                    chosen.append(int(rng.choice(fallback_pool)))
-                    continue
-                c = cursors[b]
+            for b in primary_bins.tolist():
+                src = source_bin[b]
+                candidates = pool_by_bin[src]
+                c = cursors[src]
                 if c >= len(candidates):
-                    exhausted_bins.add(b)
+                    if src == b:
+                        exhausted_bins.add(b)
                     chosen.append(int(rng.choice(candidates)))
                 else:
                     chosen.append(candidates[c])
-                    cursors[b] = c + 1
+                    cursors[src] = c + 1
 
         if exhausted_bins:
             warnings.warn(
@@ -410,8 +413,8 @@ class GCMatched:
             gap = float(np.abs(primary_gc.mean() - pool_gc[chosen].mean()))
             warnings.warn(
                 f"GCMatched: the pool has no sequence at all in {len(empty_bins)} GC bin(s) "
-                f"({ranges}), so {n_unmatched} control sequence(s) were drawn from the whole "
-                f"pool instead and are NOT GC matched (mean primary GC {primary_gc.mean():.3f} vs "
+                f"({ranges}), so {n_unmatched} control sequence(s) were drawn from the nearest GC bin the "
+                f"pool does have and are NOT GC matched (mean primary GC {primary_gc.mean():.3f} vs "
                 f"control {pool_gc[chosen].mean():.3f}, gap {gap:.3f}). Supply a pool that covers "
                 "the primary GC range, or expect GC itself to differ between the two sets.",
                 stacklevel=2,

@@ -651,7 +651,9 @@ class MotifDiscovery:
             for i, m in enumerate(motifs):
                 logp = m.holdout_logp if m.holdout_logp is not None else m.log_pvalue
                 name = m.name if m.round else f"{i + 1}-{m.consensus}"
-                items.append(meme_io.MemeMotif(name=name, pwm=m.pwm, nsites=m.n_sites, evalue=math.exp(logp)))
+                items.append(
+                    meme_io.MemeMotif(name=name, pwm=m.pwm, nsites=m.n_sites, evalue=math.exp(logp), log_evalue=logp)
+                )
             motifs = items
         store = getattr(self, "store", None)
         if background is None and store is not None and store.bg_marginals is not None:
