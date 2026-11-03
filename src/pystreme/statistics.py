@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+from scipy.special import betaln
 from scipy.stats import binom, hypergeom
 
 
@@ -112,6 +113,22 @@ def binom_logsf(k, n, p, n_terms: int = 512) -> np.ndarray:
     return out.reshape(shape)
 
 
+def _hypergeom_logpmf_in_support(k, M, n, N) -> np.ndarray:
+    """`hypergeom.logpmf(k, M, n, N)` for `k` known to be inside the support.
+
+    The same `betaln` expression scipy evaluates, without the argument
+    validation and support masking around it, which cost more than the
+    arithmetic for the few thousand cuts of one threshold search. Only for
+    callers that guarantee `max(0, N - (M - n)) <= k <= min(n, N)` (a cut's
+    counts always are): outside the support this is not -inf but garbage.
+    """
+    bad = M - n
+    return (
+        betaln(n + 1, 1) + betaln(bad + 1, 1) + betaln(M - N + 1, N + 1)
+        - betaln(k + 1, n - k + 1) - betaln(N - k + 1, bad - N + k + 1) - betaln(M + 1, 1)
+    )
+
+
 _EXACT_ALL_BELOW = 512  # candidate counts up to this are simply evaluated exactly
 _NOISE_ALPHA = 0.05  # significance a cut must reach, Bonferroni-corrected, to be worth ranking exactly
 
@@ -184,7 +201,7 @@ def _fisher_logsf_min_candidates(
     if k.size <= _EXACT_ALL_BELOW:
         return hypergeom_logsf(k - 1, M, s, N)
 
-    lower = hypergeom.logpmf(k, M, s, N)  # vectorized (betaln), O(1) per candidate
+    lower = _hypergeom_logpmf_in_support(k, M, s, N)  # O(1) per candidate; every cut's counts are in the support
     with np.errstate(divide="ignore", invalid="ignore"):
         r = ((s - k) * (N - k)) / ((k + 1) * (M - s - N + k + 1))
         upper = np.where((r >= 0) & (r < 1), lower - np.log1p(-np.clip(r, 0, 1 - 1e-12)), 0.0)

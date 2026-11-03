@@ -423,3 +423,19 @@ def test_bounded_fisher_search_without_signal_is_conservative_and_still_noise():
     assert log_p > floor  # the premise: nothing here is significant
     assert result.log_pvalue >= log_p - 1e-9
     assert result.log_pvalue > floor
+
+
+def test_in_support_logpmf_is_scipys_logpmf_exactly():
+    # the threshold search's lower bounds skip scipy's argument handling;
+    # inside the support the value must be scipy's own, bit for bit
+    from scipy.stats import hypergeom
+
+    from pystreme.statistics import _hypergeom_logpmf_in_support
+
+    rng = np.random.default_rng(0)
+    for _ in range(50):
+        M = int(rng.integers(10, 20000))
+        N = int(rng.integers(1, M))
+        n = int(rng.integers(0, M + 1))
+        k = rng.integers(max(0, N - (M - n)), min(n, N) + 1, 200)
+        np.testing.assert_array_equal(_hypergeom_logpmf_in_support(k, M, n, N), hypergeom.logpmf(k, M, n, N))

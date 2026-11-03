@@ -71,6 +71,39 @@ def _revcomp_id(ids: torch.Tensor, w: int) -> torch.Tensor:
     return _encode_digits((3 - digits).flip(dims=[-1]), w)
 
 
+def _kmer_ids_by_width(codes: torch.Tensor, mask: torch.Tensor, widths, revcomp: bool):
+    """Yield `(w, ids, rc_ids, valid)` for every `w` in `widths`, ascending.
+
+    Same values as `_kmer_ids` (and `_revcomp_id` of them), built
+    incrementally instead of from an (N, L-w+1, w) window tensor per width:
+    the forward id of the width-(w+1) window at i is `4 * id_w(i) + x[i+w]`,
+    and its reverse complement is `4 * rc_w(i+1) + (3 - x[i])` (the
+    complement of the window's first base becomes the last digit). Two
+    (N, L) passes per width, and no tensor w times the input. `rc_ids` is
+    `None` when `revcomp` is false.
+    """
+    widths = sorted(set(int(w) for w in widths))
+    if not widths:
+        return
+    length = codes.shape[1]
+    if widths[-1] > length:
+        raise ValueError(f"width {widths[-1]} is longer than the sequence length {length}")
+    x = codes.long().clamp(max=3)
+    comp = 3 - x
+    bad = torch.cumsum((~mask).to(torch.int32), dim=1)
+    bad = torch.cat([torch.zeros_like(bad[:, :1]), bad], dim=1)
+    ids, rc = x, comp  # width 1
+    targets = set(widths)
+    for w in range(1, widths[-1] + 1):
+        if w > 1:
+            ids = ids[:, :-1] * 4 + x[:, w - 1 :]
+            if revcomp:
+                rc = rc[:, 1:] * 4 + comp[:, : length - w + 1]
+        if w in targets:
+            valid = (bad[:, w:] - bad[:, : length + 1 - w]) == 0
+            yield w, ids, (rc if revcomp else None), valid
+
+
 def _id_to_word(id_: int, w: int) -> str:
     digits = _digits(torch.tensor([id_]), w)[0].tolist()
     return "".join(_ALPHABET[d] for d in digits)
@@ -104,14 +137,15 @@ def top_seeds(
     a scan-score cutoff).
     """
     results: dict[int, list[Seed]] = {}
-    for w in widths:
-        p_ids, p_valid = _kmer_ids(primary_store.codes, primary_store.mask, w)
-        c_ids, c_valid = _kmer_ids(control_store.codes, control_store.mask, w)
+    widths = list(widths)
+    primary_ids = _kmer_ids_by_width(primary_store.codes, primary_store.mask, widths, revcomp)
+    control_ids = _kmer_ids_by_width(control_store.codes, control_store.mask, widths, revcomp)
+    for (w, p_ids, p_rc, p_valid), (_, c_ids, c_rc, c_valid) in zip(primary_ids, control_ids):
         if revcomp:
             # a word and its RC are one candidate: pool them under whichever
             # packs to the smaller integer
-            p_canon = torch.minimum(p_ids, _revcomp_id(p_ids, w))[p_valid]
-            c_canon = torch.minimum(c_ids, _revcomp_id(c_ids, w))[c_valid]
+            p_canon = torch.minimum(p_ids, p_rc)[p_valid]
+            c_canon = torch.minimum(c_ids, c_rc)[c_valid]
         else:
             # forward-only: keep the orientation actually observed, or the
             # seed handed to refinement can be the one strand the scanner
@@ -176,4 +210,6 @@ def top_seeds(
             for i in order
         ]
         results[w] = seeds
-    return results
+    # in the order the widths were asked for (callers iterate this dict, and
+    # ties across widths go to the first)
+    return {w: results[w] for w in dict.fromkeys(widths)}
