@@ -8,8 +8,10 @@
 | "No such file" for a script under `/tmp` in a job | `/tmp` is node-local | put it under the repo (`.scratch/`) |
 | `RuntimeError: no bg_order available` | store built without `from_bed`/constructor background | `bg_order=` on the call, or `store.fit_background(order=2)` |
 | warning "hold-out disabled" | fewer than `min_holdout` (10) peaks on a side | more peaks, or accept training-only p-values (`holdout_logp is None`) |
-| warning "median input peak width ... more than twice size" | broad peaks | summit-center them first; positional statistics are otherwise meaningless |
-| warning "dropped N/M peaks" | off-chromosome / unknown chrom / N-rich | check `disc.store.excluded`; chromosome naming (`chr1` vs `1`) is the usual cause of `unknown_chrom` |
+| warning "median input peak width ... more than twice size" | broad, midpoint-centred peaks | pass a narrowPeak (its summit column is used) or summit-center them first; positional statistics are otherwise meaningless |
+| warning "dropped N/M peaks" | off-chromosome / unknown chrom / N-rich / duplicate window | check `disc.store.excluded`; chromosome naming (`chr1` vs `1`) is the usual cause of `unknown_chrom`; `duplicate` means two peaks gave the identical window |
+| warning "windows overlap another window" | several summits per region (MACS `--call-summits`), merged replicates | `fit` holds each overlap cluster out together, so hold-out p stays valid, but the copies still count separately in every test; merge peaks closer than `size` if they are one event |
+| `fit(primary_idx=mask)` on a version before 2026-11 ran on rows 0 and 1 only | a boolean mask was cast to integers | update; masks are now resolved to their True rows everywhere |
 | `fit` returns `[]` | nothing significant on hold-out within `patience` rounds | `keep_insignificant=True` to inspect; check the control choice; try `discover()` for the top training motif |
 | top motif looks like a truncated core (`CCCGCCC`) or has flat flanks | width settling (`min_flank_ic`, `width_tolerance`) | it is the informative core; lower `min_flank_ic` to keep weaker flanks, or compare with `annotate` |
 | the same family appears twice (GC-box in rounds 1 and 6) | erasing removes one site per peak per pass; large families leave residue | expected; `annotate` names both the same |

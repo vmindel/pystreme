@@ -37,10 +37,14 @@ def encode(seq: str) -> np.ndarray:
 
 @dataclass
 class Interval:
+    """A genomic interval; `summit` is an absolute coordinate (not an
+    offset), set from a narrowPeak file's 10th column, else `None`."""
+
     chrom: str
     start: int
     end: int
     name: str = ""
+    summit: int | None = None
 
 
 @dataclass
@@ -70,7 +74,25 @@ class BackgroundModel:
 @dataclass
 class Exclusion:
     interval: Interval
-    reason: str  # "chrom_edge" | "unknown_chrom" | "max_n_frac"
+    reason: str  # "chrom_edge" | "unknown_chrom" | "max_n_frac" | "duplicate"
+
+
+def _narrowpeak_summit(fields: list[str], start: int, end: int) -> int | None:
+    """Absolute summit coordinate from a narrowPeak row, or `None`.
+
+    Only a row of exactly 10 columns is read as narrowPeak: column 10 of a
+    BED12 is `blockCount`, also an integer, and must not be taken for a
+    summit offset. MACS writes -1 when it has no summit.
+    """
+    if len(fields) != 10:
+        return None
+    try:
+        offset = int(fields[9])
+    except ValueError:
+        return None
+    if offset < 0 or offset >= end - start:
+        return None
+    return start + offset
 
 
 def _parse_bed(path) -> list[Interval]:
@@ -85,8 +107,73 @@ def _parse_bed(path) -> list[Interval]:
                 fields = line.split()
             chrom, start, end = fields[0], int(fields[1]), int(fields[2])
             name = fields[3] if len(fields) > 3 else f"peak_{i}"
-            intervals.append(Interval(chrom, start, end, name))
+            intervals.append(Interval(chrom, start, end, name, summit=_narrowpeak_summit(fields, start, end)))
     return intervals
+
+
+def as_row_index(idx, n_rows: int, device=None) -> torch.Tensor:
+    """Validate a row selection and return it as a 1-D long tensor.
+
+    A boolean mask must have exactly `n_rows` entries and selects its True
+    rows; integer indices must lie in `[0, n_rows)`. Casting a boolean mask
+    straight to long would turn it into a list of 0s and 1s, i.e. rows 0
+    and 1 over and over, so masks are resolved here rather than at each
+    call site. Negative indices are rejected rather than wrapped.
+    """
+    if isinstance(idx, torch.Tensor):
+        t = idx.detach().cpu()
+    else:
+        t = torch.as_tensor(np.asarray(idx))
+    t = t.reshape(-1)
+    if t.dtype == torch.bool:
+        if t.numel() != n_rows:
+            raise ValueError(f"boolean row mask has {t.numel()} entries but there are {n_rows} rows")
+        t = torch.nonzero(t).squeeze(1)
+    elif t.is_floating_point():
+        if t.numel() and not bool(torch.all(t == t.round())):
+            raise TypeError("row indices must be integers or a boolean mask")
+        t = t.long()
+    else:
+        t = t.long()
+    if t.numel() and (int(t.min()) < 0 or int(t.max()) >= n_rows):
+        raise IndexError(f"row index out of range for {n_rows} rows (got {int(t.min())}..{int(t.max())})")
+    return t if device is None else t.to(device)
+
+
+def _union_find_labels(n: int, pairs) -> np.ndarray:
+    """Connected-component labels for `n` items joined by `pairs`, numbered
+    0.. in order of each component's first (lowest-index) member."""
+    parent = list(range(n))
+
+    def find(a: int) -> int:
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for a, b in pairs:
+        ra, rb = find(int(a)), find(int(b))
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+    roots = np.array([find(i) for i in range(n)], dtype=np.int64)
+    _, labels = np.unique(roots, return_inverse=True)  # roots are lowest members, so this keeps first-appearance order
+    return labels.astype(np.int64)
+
+
+def _overlap_pairs(intervals: list[Interval]):
+    """Pairs of row indices whose intervals overlap (same chrom, >= 1 bp),
+    enough to connect every overlap cluster (not every overlapping pair)."""
+    order = sorted(range(len(intervals)), key=lambda i: (intervals[i].chrom, intervals[i].start))
+    pairs = []
+    prev = None  # (row, chrom, cluster end)
+    for i in order:
+        iv = intervals[i]
+        if prev is not None and iv.chrom == prev[1] and iv.start < prev[2]:
+            pairs.append((prev[0], i))
+            prev = (prev[0], prev[1], max(prev[2], iv.end))
+        else:
+            prev = (i, iv.chrom, iv.end)
+    return pairs
 
 
 class SequenceStore:
@@ -103,6 +190,7 @@ class SequenceStore:
         intervals: list[Interval],
         excluded: list[Exclusion],
         device: str = "cpu",
+        genomic: bool = False,
     ):
         assert codes.shape == mask.shape
         assert codes.shape[0] == len(intervals)
@@ -111,6 +199,7 @@ class SequenceStore:
         self.intervals = intervals
         self.excluded = excluded
         self.device = device
+        self.genomic = genomic  # intervals are real genome coordinates (from_bed), so overlaps mean shared sequence
         self.n_seqs, self.length = codes.shape
         self._onehot_cache: dict[torch.dtype, torch.Tensor] = {}
         self.bg_cumsum: torch.Tensor | None = None
@@ -132,6 +221,7 @@ class SequenceStore:
         size: int,
         max_n_frac: float = 0.2,
         device: str = "cpu",
+        summit: str = "auto",
     ) -> "SequenceStore":
         """Fixed-width extraction: `center ± size/2`, HOMER `-size` semantics.
 
@@ -141,17 +231,33 @@ class SequenceStore:
         chromosome end, or reference a chromosome not in the genome, are
         dropped with a warning; so are sequences whose N-fraction exceeds
         `max_n_frac`. See DESIGNDOC.md §2.2.
+
+        The window centre is the peak summit when one is known and
+        `summit="auto"` (the default): a narrowPeak file's 10th column
+        (offset from start; -1 means none), or `Interval.summit` for a
+        pre-parsed list. Otherwise, or with `summit="midpoint"`, it is the
+        interval midpoint.
+
+        Peaks whose windows come out identical (same chromosome and start)
+        are kept once; the rest are dropped with reason `"duplicate"`.
+        Windows that overlap without being identical (e.g. several MACS
+        summits in one region) are kept, with a warning, and `fit` keeps
+        each overlapping cluster on one side of its hold-out split.
         """
         import pyfaidx
 
+        if summit not in ("auto", "midpoint"):
+            raise ValueError(f"summit must be 'auto' or 'midpoint', got {summit!r}")
+        use_summit = summit == "auto"
         raw_intervals = peaks if isinstance(peaks, list) else _parse_bed(peaks)
         fasta = genome if isinstance(genome, pyfaidx.Fasta) else pyfaidx.Fasta(str(genome))
 
-        if raw_intervals:
+        midpoint_centred = [iv for iv in raw_intervals if not (use_summit and iv.summit is not None)]
+        if midpoint_centred:
             # §5 "peak centering quality": fixed windows assume the center means
             # something; broad input peaks make that (and §2.7's positional
-            # statistics) unreliable.
-            median_width = float(np.median([iv.end - iv.start for iv in raw_intervals]))
+            # statistics) unreliable. Summit-centred peaks are exempt.
+            median_width = float(np.median([iv.end - iv.start for iv in midpoint_centred]))
             if median_width > 2 * size:
                 warnings.warn(
                     f"SequenceStore.from_bed: median input peak width is {median_width:.0f} bp, more than twice "
@@ -170,18 +276,26 @@ class SequenceStore:
         kept_intervals: list[Interval] = []
         excluded_idx: list[tuple[int, Exclusion]] = []  # (input index, exclusion): reported in input order
         chrom_lens: dict[str, int] = {}
+        seen_windows: set[tuple[str, int]] = set()
         for i, iv in enumerate(raw_intervals):
             if iv.chrom not in fasta:
                 excluded_idx.append((i, Exclusion(iv, "unknown_chrom")))
                 continue
             if iv.chrom not in chrom_lens:
                 chrom_lens[iv.chrom] = len(fasta[iv.chrom])
-            center = (iv.start + iv.end) // 2
+            center = iv.summit if (use_summit and iv.summit is not None) else (iv.start + iv.end) // 2
             new_start = center - size // 2
             new_end = new_start + size
             if new_start < 0 or new_end > chrom_lens[iv.chrom]:
                 excluded_idx.append((i, Exclusion(iv, "chrom_edge")))
                 continue
+            if (iv.chrom, new_start) in seen_windows:
+                # the same sequence twice is not two observations: it would
+                # double its weight in every test and could sit on both
+                # sides of the hold-out split
+                excluded_idx.append((i, Exclusion(iv, "duplicate")))
+                continue
+            seen_windows.add((iv.chrom, new_start))
             windows.append((i, iv.chrom, new_start, new_end))
 
         codes_by_input: dict[int, np.ndarray] = {}
@@ -212,7 +326,7 @@ class SequenceStore:
                 continue
 
             kept_codes.append(codes)
-            kept_intervals.append(Interval(iv.chrom, new_start, new_end, iv.name))
+            kept_intervals.append(Interval(iv.chrom, new_start, new_end, iv.name, summit=iv.summit))
 
         excluded = [exc for _, exc in sorted(excluded_idx, key=lambda t: t[0])]
         if excluded:
@@ -227,10 +341,22 @@ class SequenceStore:
         if not kept_codes:
             raise ValueError("SequenceStore.from_bed: no peaks survived extraction")
 
+        overlap_pairs = _overlap_pairs(kept_intervals)
+        if overlap_pairs:
+            n_clustered = int((np.bincount(_union_find_labels(len(kept_intervals), overlap_pairs)) > 1).sum())
+            n_rows = len({r for pair in overlap_pairs for r in pair})
+            warnings.warn(
+                f"SequenceStore.from_bed: {n_rows}/{len(kept_intervals)} windows overlap another window "
+                f"({n_clustered} overlap clusters) and so share sequence. fit() keeps each cluster on one side "
+                "of the hold-out split, but they still count as separate sequences in every test; merge peaks "
+                f"closer than size={size} first if they are the same binding event.",
+                stacklevel=2,
+            )
+
         codes_arr = np.stack(kept_codes)
         codes_t = torch.from_numpy(codes_arr).to(device=device, dtype=torch.uint8)
         mask_t = codes_t != _N_CODE
-        return cls(codes_t, mask_t, kept_intervals, excluded, device=device)
+        return cls(codes_t, mask_t, kept_intervals, excluded, device=device, genomic=True)
 
     @classmethod
     def from_fasta(cls, path, device: str = "cpu", max_n_frac: float = 0.2) -> "SequenceStore":
@@ -307,13 +433,14 @@ class SequenceStore:
         `control.Explicit`'s index-array form, where re-fitting on the
         subset would silently change what "background" means.
         """
-        idx_t = torch.as_tensor(idx, dtype=torch.long, device=self.codes.device)
+        idx_t = as_row_index(idx, self.n_seqs, device=self.codes.device)
         new = SequenceStore(
             self.codes[idx_t].clone(),
             self.mask[idx_t].clone(),
             [self.intervals[i] for i in idx_t.tolist()],
             excluded=[],
             device=self.device,
+            genomic=self.genomic,
         )
         if self.bg_cumsum is not None:
             new.bg_cumsum = self.bg_cumsum[idx_t].clone()
@@ -323,6 +450,32 @@ class SequenceStore:
             new.bg_model = self.bg_model
             new.bg_order = self.bg_order
         return new
+
+    def holdout_groups(self) -> np.ndarray:
+        """One group label per row; rows that share sequence share a label.
+
+        Two rows share sequence when their codes are identical, or, for a
+        store built by `from_bed`, when their windows overlap on the
+        genome. `fit` splits training and hold-out by group, so no
+        hold-out sequence has a copy (or a shared stretch) in training --
+        otherwise a motif fitted to chance words in training finds the same
+        words again in the hold-out, and the hold-out p-value stops being
+        an independent test. Labels count up from 0 in order of each
+        group's first row, so a store with no shared sequence gets
+        `arange(n_seqs)`.
+        """
+        _, same_codes = torch.unique(self.codes, dim=0, return_inverse=True)
+        same_codes = same_codes.cpu().numpy()
+        first_row: dict[int, int] = {}
+        pairs = []
+        for row, key in enumerate(same_codes.tolist()):
+            if key in first_row:
+                pairs.append((first_row[key], row))
+            else:
+                first_row[key] = row
+        if self.genomic:
+            pairs += _overlap_pairs(self.intervals)
+        return _union_find_labels(self.n_seqs, pairs)
 
     def to_strings(self) -> list[str]:
         """Decode every row back to an ACGTN string (masked/erased positions read as `N`)."""

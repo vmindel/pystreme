@@ -18,3 +18,5 @@ jobs:
         run: pip install -e ".[io,tables,plot,dev]"
       - name: Run tests (GPU tests skip themselves)
         run: pytest -q
+      - name: Null-calibration tests
+        run: pytest -q -m slow

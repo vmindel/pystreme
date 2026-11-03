@@ -373,7 +373,9 @@ def test_fit_reports_sites_under_the_round_background_not_the_setup_one():
     store.fit_background(order=1)
     disc = MotifDiscovery(store, widths=[10], holdout_frac=0.1, seed=0)
 
-    motifs = disc.fit(n_motifs=1, n_iter=5, keep_insignificant=True)
+    # identical sequences are one hold-out group, so no split is possible
+    with pytest.warns(UserWarning, match="hold-out disabled"):
+        motifs = disc.fit(n_motifs=1, n_iter=5, keep_insignificant=True)
     assert motifs
     motif = motifs[0]
     assert len(set(motif.sites.scores.tolist())) == 1  # identical sequences, identical scores
