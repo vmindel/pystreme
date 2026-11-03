@@ -126,8 +126,10 @@ m.log_pvalue     # natural-log p-value on the training set: selected, optimistic
 m.n_sites        # primary sequences whose best site clears m.threshold
 m.sites          # best score / position / strand for every primary sequence
 m.positions      # passing-site centers relative to the peak center (bp)
-m.central_logp   # CentriMo-style central enrichment (Bonferroni over window sizes)
+m.central_logp   # CentriMo-style central enrichment vs uniform placement (Bonferroni over window sizes)
 m.central        # ...with the winning half-width and counts
+m.decoy_central_logp  # central beyond the motif's composition: vs uniform AND vs decoys
+m.decoy_central       # ...the decoy comparison: half-width, counts, .fold, decoy site offsets
 ```
 
 Two p-values on purpose. The threshold was chosen on the training
@@ -137,11 +139,34 @@ saw and is what `fit` uses to accept a motif. It is `None` when there was
 no hold-out (`discover()`, or too few sequences), and then `log_pvalue` is
 all you have. Both are natural logs: `exp(m.holdout_logp)` is the p-value.
 
-`central_logp` is the second thing to look at. The bound factor's own
-motif is usually sharply central and co-factors much less so (on the SP1
-ChEC-seq peaks in `BENCHMARKS.md`: GC-box central log p -381, AP-1 -26). A motif with strong enrichment and no
-central signal is worth a second look -- a co-occurring element, or a
-peak set whose centers are not summits.
+Central enrichment is the second thing to look at, and `decoy_central_logp`
+is the version to read. The bound factor's own motif is usually sharply
+central and co-factors much less so. But base composition also changes
+towards the summit of most peak sets (GC rises at promoter and CpG-island
+peaks), so a GC-rich motif's best sites drift to the centre whether or not
+anything binds them, and `central_logp`, which compares with uniform
+placement, reads that drift as central binding. On synthetic GC-cored
+peaks, a GC-rich matrix with nothing planted scores `central_logp` around
+-200 to -350.
+
+`decoy_central_logp` controls for it. Each motif gets `n_decoys` (default
+10) decoys: its own matrix with the columns shuffled, so the same base
+composition and information content but not the site. They are scanned on
+the same peaks, and each contributes its best site in its top `n_sites`
+peaks. The motif counts as central only if its sites are more central than
+uniform placement *and* more central than its decoys'; the reported value
+is the larger of the two p-values. Both conditions are needed: in GC-cored
+peaks an AT-leaning motif's decoys are pushed out of the centre, and
+uniformly placed sites would look central next to them. `plot.positions`
+draws the decoys' sites as a line, so a motif that only follows the line
+is following composition. Two limits. Decoys of a low-complexity motif (a
+run of Gs) still partly match the motif, which makes the test
+conservative. And column shuffling keeps base composition, not
+dinucleotide steps, so a motif whose signal is mostly CpG content is
+controlled for GC but not for CpG.
+
+A motif with strong enrichment and no central signal is worth a second
+look: a co-occurring element, or a peak set whose centres are not summits.
 
 Repeated `fit` calls over overlapping subsets, selecting on the results,
 quietly undo the hold-out guarantee (`DESIGNDOC.md` §5). Vary `seed` per

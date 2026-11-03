@@ -45,8 +45,10 @@ enr = disc.enrichment(pwm)                 # SEA-style enrichment of a known PWM
 
 Two numbers per motif, deliberately: `holdout_logp` is the one to quote
 (threshold re-tested on held-out peaks); `log_pvalue` is the training-set,
-selected, optimistic one. `central_logp` separates directly bound motifs
-(sharply central) from co-factors. Both are natural logs.
+selected, optimistic one. `decoy_central_logp` separates directly bound
+motifs (sharply central beyond their composition) from co-factors;
+`central_logp` is the same vs a uniform null, fooled by GC-rich summits.
+All are natural logs.
 
 ## Task → reference file
 

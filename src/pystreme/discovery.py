@@ -24,8 +24,11 @@ from .seeds import top_seeds as _top_seeds
 from .sequence_store import SequenceStore
 from .statistics import (
     CentralEnrichment,
+    DecoyCentralEnrichment,
     ThresholdResult,
     central_enrichment,
+    decoy_central_enrichment,
+    decoy_pwms,
     enrichment_at_threshold,
     optimal_threshold,
 )
@@ -52,7 +55,26 @@ class Motif:
     above `threshold`. `positions` are the centers of those passing sites
     relative to the sequence center, in bases (§2.7: fixed-width,
     peak-centered windows make this free), and `central` /`central_logp`
-    is the CentriMo-style central-enrichment test over them.
+    is the CentriMo-style central-enrichment test over them against a
+    uniform placement.
+
+    `decoy_central_logp` asks whether the sites are central *beyond what
+    the motif's base composition explains*, the question behind "bound
+    directly vs. co-occurring". Composition alone pulls a GC-rich motif's
+    sites towards GC-rich peak summits, which the uniform null reads as
+    central binding. So the sites are also compared with decoys
+    (`decoy_central`): column-permuted copies of the PWM, with its
+    composition, scanned on the same sequences, whose sites follow the same
+    pull. A motif counts as central only if it beats both nulls, uniform
+    placement and its decoys, so `decoy_central_logp` is the larger of the
+    two p-values (an intersection-union test: valid at its stated level,
+    since rejecting needs both). The decoy comparison alone is not enough:
+    in GC-cored peaks an AT-leaning motif's decoys are pushed *out* of the
+    centre, and uniformly placed sites then look central next to them. The
+    decoy comparison by itself is `decoy_central.log_pvalue`. `None` when
+    `n_decoys=0` or there are no sites. Decoys of a low-complexity motif
+    (a G-run GC box) partly match the motif itself, which makes the test
+    conservative, not the reverse.
     """
 
     pwm: np.ndarray
@@ -68,6 +90,8 @@ class Motif:
     positions: np.ndarray | None = field(default=None, repr=False)
     central_logp: float | None = None
     central: CentralEnrichment | None = field(default=None, repr=False)
+    decoy_central_logp: float | None = None
+    decoy_central: DecoyCentralEnrichment | None = field(default=None, repr=False)
     round: int = 0
     intervals: list | None = field(default=None, repr=False)  # the extracted windows `sites` is indexed by
 
@@ -91,6 +115,8 @@ class Motif:
             bits.append(f"holdout_logp={self.holdout_logp:.1f}")
         if self.central_logp is not None:
             bits.append(f"central_logp={self.central_logp:.1f}")
+        if self.decoy_central_logp is not None:
+            bits.append(f"decoy_central_logp={self.decoy_central_logp:.1f}")
         return f"Motif({self.name}, " + ", ".join(bits) + ")"
 
 
@@ -384,16 +410,42 @@ class MotifDiscovery:
         round_i: int,
         revcomp: bool,
         kernel: str,
+        n_decoys: int = 10,
+        seed: int | None = None,
     ) -> Motif:
         """Turn a refined PWM into a reported `Motif`: sites on *all* primary
         sequences (train and hold-out, nothing erased), passing-site
-        positions relative to center, central enrichment (§2.7)."""
-        res = _scan([best.pwm], primary_full, revcomp=revcomp, kernel=kernel)
+        positions relative to center, central enrichment (§2.7) against a
+        uniform placement and against `n_decoys` composition-matched decoys.
+
+        The decoys are scanned in the same call as the motif, so under the
+        same background. Each contributes its best site in the `n_sites`
+        sequences where it scores highest -- selected as strongly as the
+        motif's own sites, rather than at the motif's threshold, which means
+        something different on a different matrix.
+        """
+        decoys = decoy_pwms(best.pwm, n_decoys, np.random.default_rng(None if seed is None else [seed, round_i]))
+        res = _scan([best.pwm, *decoys], primary_full, revcomp=revcomp, kernel=kernel)
         scores, positions, strands = res.scores[0], res.positions[0], res.strands[0]
         passing = (scores >= best.threshold) & torch.isfinite(scores)
         w, length = best.width, primary_full.length
-        offsets = positions[passing].cpu().numpy().astype(np.float64) + (w - 1) / 2 - (length - 1) / 2
+        to_offset = (w - 1) / 2 - (length - 1) / 2
+        offsets = positions[passing].cpu().numpy().astype(np.float64) + to_offset
         central = central_enrichment(offsets, n_windows=length - w + 1) if length >= w else None
+
+        decoy_central = None
+        n_sites = int(passing.sum())
+        if decoys and n_sites and length >= w:
+            d_scores = res.scores[1:].cpu().numpy()
+            d_positions = res.positions[1:].cpu().numpy()
+            decoy_offsets = []
+            for k in range(len(decoys)):
+                finite = np.flatnonzero(np.isfinite(d_scores[k]))
+                top = finite[np.argsort(-d_scores[k][finite], kind="stable")[:n_sites]]
+                decoy_offsets.append(d_positions[k][top].astype(np.float64) + to_offset)
+            decoy_central = decoy_central_enrichment(
+                offsets, np.concatenate(decoy_offsets), n_windows=length - w + 1, n_decoys=len(decoys)
+            )
         return Motif(
             pwm=best.pwm,
             consensus=_consensus(best.pwm),
@@ -408,6 +460,11 @@ class MotifDiscovery:
             positions=offsets,
             central_logp=None if central is None else central.log_pvalue,
             central=central,
+            # central against uniform placement AND against the decoys
+            decoy_central_logp=None
+            if decoy_central is None or central is None
+            else max(central.log_pvalue, decoy_central.log_pvalue),
+            decoy_central=decoy_central,
             round=round_i,
             intervals=list(primary_full.intervals),
         )
@@ -459,6 +516,7 @@ class MotifDiscovery:
         seed: int | None = None,
         min_flank_ic: float = 0.3,
         width_tolerance: float = 2.0,
+        n_decoys: int = 10,
     ) -> Motif:
         """Single-motif de novo discovery (§"Phase 3" deliverable): find seed
         words per width (§2.1), refine each width's best seeds (§2.1's
@@ -470,8 +528,9 @@ class MotifDiscovery:
         This is one round of `fit` without the hold-out split, erasing, or
         stopping rules -- one motif, one significance number computed on
         the same data it was found in (`Motif.holdout_logp` stays `None`;
-        see `Motif`'s docstring). Positions and central enrichment are
-        filled in the same way `fit` does.
+        see `Motif`'s docstring). Positions and both central-enrichment
+        tests (uniform and decoy, `n_decoys`) are filled in the same way
+        `fit` does.
         """
         widths = self.widths if widths is None else widths
         control = self.control if control is None else control
@@ -483,7 +542,9 @@ class MotifDiscovery:
         )
         if best is None:
             raise RuntimeError("MotifDiscovery.discover: no seed words found for any requested width")
-        return self._finalize(best, primary_store, holdout=None, round_i=0, revcomp=revcomp, kernel=kernel)
+        return self._finalize(
+            best, primary_store, holdout=None, round_i=0, revcomp=revcomp, kernel=kernel, n_decoys=n_decoys, seed=seed
+        )
 
     def fit(
         self,
@@ -506,6 +567,7 @@ class MotifDiscovery:
         min_holdout: int = 10,
         min_flank_ic: float = 0.3,
         width_tolerance: float = 2.0,
+        n_decoys: int = 10,
         verbose: bool = False,
     ) -> list[Motif]:
         """The round loop (§"Phase 4" deliverable): `motifs = disc.fit(idx)`.
@@ -530,7 +592,10 @@ class MotifDiscovery:
         are still erased before continuing, as in STREME). Motifs come back
         in discovery order, `Motif.round` numbered from 1. `min_flank_ic`
         and `width_tolerance` control how the per-round width is settled
-        (see `_discover_on`).
+        (see `_discover_on`). `n_decoys` composition-matched decoy matrices
+        per motif give `Motif.decoy_central_logp` (0 skips it); they are
+        drawn from `seed` and the round number, so the same call gives the
+        same decoys.
 
         Hold-out caveat (§5): the hold-out p-value is valid for *one* call.
         Calling `fit` repeatedly over overlapping subsets and picking the
@@ -609,7 +674,7 @@ class MotifDiscovery:
                 hp = _scan([best.pwm], p_hold, revcomp=revcomp, kernel=kernel).scores[0].cpu().numpy()
                 hc = _scan([best.pwm], c_hold, revcomp=revcomp, kernel=kernel).scores[0].cpu().numpy()
                 holdout = enrichment_at_threshold(hp, hc, best.threshold)
-            motif = self._finalize(best, primary_full, holdout, round_i, revcomp, kernel)
+            motif = self._finalize(best, primary_full, holdout, round_i, revcomp, kernel, n_decoys=n_decoys, seed=seed)
             logp = motif.holdout_logp if use_holdout else motif.log_pvalue
             significant = logp <= log_thresh
             if verbose:

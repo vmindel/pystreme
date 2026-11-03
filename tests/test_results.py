@@ -33,7 +33,7 @@ def test_summary_one_row_per_motif(fitted):
     assert list(df["round"]) == [1, 2]
     assert (df["n_sites"] == [m.n_sites for m in motifs]).all()
     assert df["holdout_logp"].notna().all()
-    assert set(df.columns) >= {"consensus", "width", "train_logp", "central_logp", "central_half_width", "threshold", "seed"}
+    assert set(df.columns) >= {"consensus", "width", "train_logp", "central_logp", "central_half_width", "decoy_central_logp", "central_fold_vs_decoys", "threshold", "seed"}
     assert len(summary(motifs[0])) == 1  # a single Motif works too
 
 

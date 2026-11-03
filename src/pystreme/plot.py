@@ -47,31 +47,55 @@ def logo(motif, ax=None, title: str | None = None):
     return ax
 
 
+def _central_test(motif):
+    """The central-enrichment result to show: the composition-controlled
+    one (`decoy_central_logp`, with the decoy comparison's half-width) when
+    the motif has it, else the uniform-null one."""
+    if motif.decoy_central is not None and motif.decoy_central_logp is not None:
+        return motif.decoy_central_logp, motif.decoy_central.half_width, "central log p (beyond composition)"
+    if motif.central is not None:
+        return motif.central.log_pvalue, motif.central.half_width, "central log p"
+    return None, None, None
+
+
 def positions(motif, ax=None, bins: int = 40, title: str | None = None, shade_below_logp: float = np.log(0.05)):
     """Histogram of the motif's passing-site centers relative to the
-    sequence center (`Motif.positions`, §2.7), with the central window
-    that won the CentriMo-style test shaded (only when that test is
-    significant, `central_logp < shade_below_logp`) and its log p in the
-    title. Sites at every offset with equal frequency means no positional
-    signal; a spike at 0 is what a directly bound, well-summited factor
-    looks like."""
+    sequence center (`Motif.positions`, §2.7). Where the motif has decoys,
+    their sites are overlaid as a line, scaled to the motif's site count:
+    that is where sites of the motif's base composition land on these
+    peaks, so a motif that only follows the line is following composition.
+
+    The central window of the test shown in the title is shaded when that
+    test is significant (`< shade_below_logp`): the composition-controlled
+    `decoy_central_logp` when present, else the uniform-null
+    `central_logp`. A spike at 0 well above the decoy line is what a
+    directly bound, well-summited factor looks like."""
     plt = _mpl()
     if motif.positions is None or len(motif.positions) == 0:
         raise ValueError("plot.positions: this Motif has no passing sites")
     if ax is None:
         _, ax = plt.subplots(figsize=(4, 2.2))
-    ax.hist(motif.positions, bins=bins, color="0.35")
+    decoy = motif.decoy_central
+    has_decoys = decoy is not None and decoy.decoy_offsets is not None and len(decoy.decoy_offsets) > 0
+    # one set of bins over both, so a tight motif spike doesn't crop the decoys' spread
+    span = np.concatenate([motif.positions, decoy.decoy_offsets]) if has_decoys else np.asarray(motif.positions)
+    edges = np.histogram_bin_edges(span, bins=bins)
+    ax.hist(motif.positions, bins=edges, color="0.35", label="sites")
+    if has_decoys:
+        decoy_counts, _ = np.histogram(decoy.decoy_offsets, bins=edges)
+        scale = len(motif.positions) / len(decoy.decoy_offsets)
+        ax.stairs(decoy_counts * scale, edges, color="tab:blue", lw=1.0, label="decoys (scaled)")
     ax.axvline(0, color="tab:red", lw=0.8)
+    logp, half_width, label = _central_test(motif)
     # shade the winning window only when the test says there is one: with
     # no central signal the "best" window is arbitrary (often nearly the
     # whole axis) and shading it would suggest a result that isn't there
-    if motif.central is not None and motif.central.log_pvalue < shade_below_logp:
-        h = motif.central.half_width
-        ax.axvspan(-h, h, color="tab:red", alpha=0.15, lw=0)
+    if logp is not None and logp < shade_below_logp:
+        ax.axvspan(-half_width, half_width, color="tab:red", alpha=0.15, lw=0)
     if title is None:
         title = motif.name
-        if motif.central_logp is not None:
-            title += f"   central log p = {motif.central_logp:.1f}"
+        if logp is not None:
+            title += f"   {label} = {logp:.1f}"
     ax.set_title(title)
     ax.set_xlabel("site center relative to peak center (bp)")
     ax.set_ylabel("sites")
@@ -132,7 +156,8 @@ def report(motifs, figsize_per_row: tuple[float, float] = (9.0, 2.2), annotation
         row[0].title.set_fontsize("medium")
         if m.positions is not None and len(m.positions):
             positions(m, ax=row[1], title="")
-            row[1].set_title(f"central log p = {m.central_logp:.1f}" if m.central_logp is not None else "")
+            logp, _, label = _central_test(m)
+            row[1].set_title(f"{label} = {logp:.1f}" if logp is not None else "", fontsize="medium")
         else:
             row[1].set_axis_off()
     fig.tight_layout()

@@ -23,8 +23,9 @@ summary(motifs)
   refinement, hold-out re-test of each motif's threshold, site erasing,
   patience-based stopping.
 - **Positional output for free**: per-site offsets from the peak center and a
-  CentriMo-style central-enrichment statistic, which separates the bound
-  factor's own motif from co-occurring ones.
+  CentriMo-style central-enrichment statistic, tested against
+  composition-matched decoys as well as uniform placement, which separates
+  the bound factor's own motif from co-occurring ones.
 - **Independently useful pieces**: a batched PWM scanner (`scan`), a
   SEA-style enrichment test for a known motif (`enrichment`), tables
   (`summary`, `sites_frame`), database annotation (`annotate`), logos and

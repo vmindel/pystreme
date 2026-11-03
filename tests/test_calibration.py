@@ -139,3 +139,11 @@ def test_row_wise_split_of_duplicates_is_anticonservative(null_runs):
     pvalues = [np.exp(m.holdout_logp) for m in null_runs(duplicated=True, row_split=True)]
     assert _excess_tail(pvalues, 0.1) < _REJECT
     assert _excess_tail(pvalues, 0.25) < _REJECT
+
+
+@pytest.mark.slow
+def test_decoy_central_logp_is_calibrated_under_the_null(null_runs):
+    motifs = [m for m in null_runs(duplicated=False) if m.decoy_central_logp is not None]
+    assert len(motifs) > 0.9 * _N_RUNS
+    _assert_calibrated([np.exp(m.decoy_central_logp) for m in motifs], "decoy_central_logp, iid null")
+    _assert_calibrated([np.exp(m.decoy_central.log_pvalue) for m in motifs], "decoy comparison alone, iid null")
