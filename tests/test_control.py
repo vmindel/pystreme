@@ -315,3 +315,28 @@ def test_explicit_index_array_resolves_against_the_universe_when_given():
     # and resolve_control threads it through
     result = resolve_control(np.array([4, 5]), primary, universe=store)
     torch.testing.assert_close(result.codes, store.codes[np.array([4, 5])])
+
+
+def test_gc_matched_substitutes_come_from_the_nearest_occupied_bin():
+    # pool only at 0.2 and 0.8 GC; a 0.3-GC primary set should draw from the
+    # 0.2 bin, not from anywhere in the pool
+    low = _random_seqs(40, 40, seed=0, gc=0.2)
+    high = _random_seqs(40, 40, seed=1, gc=0.8)
+    pool = SequenceStore.from_sequences(low + high)
+    primary = SequenceStore.from_sequences(_random_seqs(30, 40, seed=2, gc=0.3))
+    with pytest.warns(UserWarning, match="nearest GC bin"):
+        matched = GCMatched(pool=pool, n_bins=20).generate(primary, seed=0)
+    gc = ((matched.codes == 1) | (matched.codes == 2)).float().mean(dim=1)
+    assert float(gc.max()) < 0.5  # every substitute from the low-GC half of the pool
+
+
+def test_gc_matched_with_an_uncovered_range_is_not_quadratic():
+    import time
+
+    rng = np.random.default_rng(0)
+    primary = SequenceStore.from_sequences(["".join(rng.choice(list("GC"), 50)) for _ in range(2000)])
+    pool = SequenceStore.from_sequences(["".join(rng.choice(list("AT"), 50)) for _ in range(20000)])
+    start = time.perf_counter()
+    with pytest.warns(UserWarning):
+        GCMatched(pool=pool).generate(primary, seed=0)
+    assert time.perf_counter() - start < 1.0  # was ~1.8 s here, and grew with primary x pool
