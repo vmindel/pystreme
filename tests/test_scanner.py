@@ -194,3 +194,63 @@ def test_scan_multiple_widths_matches_individual_calls(random_store, kernel):
     torch.testing.assert_close(combined.scores[1], only8.scores[0])
     torch.testing.assert_close(combined.positions[0], only5.positions[0])
     torch.testing.assert_close(combined.positions[1], only8.positions[0])
+
+
+# --- tie-breaking: by rule, not by rounding ---------------------------------
+
+
+def test_pick_best_breaks_near_ties_leftmost_whatever_the_rounding_noise():
+    from pystreme.scanner import _pick_best
+
+    base = torch.tensor([[[1.0, 5.0, 2.0, 5.0, 0.0]]])
+    for noise in (1e-6, -1e-6):  # the later copy rounds a hair higher, or lower
+        fwd = base.clone()
+        fwd[0, 0, 3] += noise
+        score, pos, strand = _pick_best(fwd, None)
+        assert pos.item() == 1 and strand.item() == 1
+        assert score.item() == fwd[0, 0, 1].item()  # the chosen window's own score
+    fwd = base.clone()
+    fwd[0, 0, 3] += 1e-2  # a real difference still wins
+    assert _pick_best(fwd, None)[1].item() == 3
+
+
+def test_pick_best_prefers_forward_on_a_strand_tie_and_reverse_on_a_real_win():
+    from pystreme.scanner import _pick_best
+
+    fwd = torch.tensor([[[0.0, 4.0, 1.0]]])
+    for noise in (1e-6, -1e-6):  # a palindrome: both strands score the same
+        _, pos, strand = _pick_best(fwd, fwd + noise)
+        assert (pos.item(), strand.item()) == (1, 1)
+    rc = fwd.clone()
+    rc[0, 0, 2] = 4.5
+    score, pos, strand = _pick_best(fwd, rc)
+    assert (pos.item(), strand.item(), score.item()) == (2, -1, 4.5)
+
+
+def test_pick_best_rows_without_a_valid_window():
+    from pystreme.scanner import _pick_best
+
+    fwd = torch.full((2, 1, 4), float("-inf"))
+    fwd[1, 0, 2] = 3.0
+    score, pos, strand = _pick_best(fwd, fwd.clone())
+    assert score[0, 0].item() == float("-inf") and pos[0, 0].item() == 0 and strand[0, 0].item() == 1
+    assert (score[1, 0].item(), pos[1, 0].item()) == (3.0, 2)
+
+
+@pytest.mark.parametrize("kernel", ["conv", "gather"])
+def test_scan_reports_the_first_of_two_identical_sites(kernel):
+    # the golden two_motifs case: a site next to a chance copy of itself
+    rng = np.random.default_rng(0)
+    site = "GGGGCGGGGC"
+    seqs = []
+    for _ in range(20):
+        bases = list(rng.choice(list("AT"), 60))  # A/T flanks: no chance near-copies
+        bases[20:36] = list("C" + site + "GGGGC")  # the site at 21 and again at 26, both preceded by C
+        seqs.append("".join(bases))
+    store = SequenceStore.from_sequences(seqs)
+    store.fit_background(order=1)
+    pwm = np.full((4, len(site)), 0.02)
+    for i, b in enumerate(site):
+        pwm["ACGT".index(b), i] = 0.94
+    res = scan([pwm], store, kernel=kernel)
+    assert set(res.positions[0].tolist()) == {21}
