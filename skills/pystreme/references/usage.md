@@ -78,8 +78,10 @@ sites = disc.scan({"SP1": pwm_a, "KLF4": pwm_b}, p_cutoff=1e-5)   # names from d
 enr = disc.enrichment(pwm, control="dinuc_shuffle")   # ThresholdResult: .threshold .log_pvalue .table
 ```
 
-`disc.scan` calls sites with moodspy (MOODS): every placement on either
-strand at `p_cutoff` (default 1e-4), scores in log2 bits against the
+`disc.scan` calls sites with moodspy (MOODS): placements on either
+strand at `p_cutoff` (default 1e-4), overlapping hits of a motif collapsed
+to the best one (`overlaps="any"`; `"opposite"` = strand pairs only;
+`None` = keep all), scores in log2 bits against the
 store's order-0 marginals. `enrichment`/`fit` score in nats against the
 order-`bg_order` background; the best-window scanner they use is
 `pystreme.scanner.scan([pwm], disc.store)` -> `ScanResult`.

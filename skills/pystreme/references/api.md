@@ -20,11 +20,11 @@ disc.fit(primary_idx=None, n_motifs=3, pvalue_thresh=0.05, *, widths, control, h
          n_per_width=4, n_iter=20, revcomp, kernel="auto", n_per_seq=1, bg_order, patience=3,
          keep_insignificant=False, min_holdout=10, min_flank_ic=0.3, width_tolerance=2.0, verbose=False) -> list[Motif]
 disc.discover(widths, control, idx, n_per_width, n_iter, revcomp, kernel, n_per_seq, bg_order, seed, ...) -> Motif
-disc.scan(pwm | Motif | {name: pwm} | [..], idx=None, p_cutoff=1e-4, background=None, n_jobs=None) -> DataFrame
+disc.scan(pwm | Motif | {name: pwm} | [..], idx=None, p_cutoff=1e-4, background=None, n_jobs=None, overlaps="any") -> DataFrame
                                         # moodspy sites: motif,row,peak,chrom,start,end,strand,score(bits),offset
 disc.enrichment(pwm, control=None, idx=None, revcomp=None, kernel="auto", n_per_seq=1, bg_order=None, seed=None) -> ThresholdResult
 disc.to_meme(motifs | {name: pwm} | [MemeMotif], path, background=None)
-disc.to_bed(motifs, path, p_cutoff=1e-4, background=None, n_jobs=None) -> int   # BED6 of disc.scan's sites
+disc.to_bed(motifs, path, p_cutoff=1e-4, background=None, n_jobs=None, overlaps="any") -> int   # BED6 of disc.scan's sites
 disc.store  # SequenceStore
 
 Motif: pwm, consensus, width, seed, threshold, log_pvalue, sites: ScanResult, n_sites,

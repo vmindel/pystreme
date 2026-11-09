@@ -199,8 +199,12 @@ their round prefix, so `3-GCGCNTGCGCA` is still round 3 wherever it sits.
 Sites are called with [moodspy](https://github.com/vmindel/moodspy), the
 MOODS port: every placement on either strand whose log2-odds score reaches
 the motif's exact p-value cutoff (`p_cutoff=1e-4` by default, FIMO's
-default), against the store's order-0 base composition. A peak can carry
-several sites or none. Load the BED in a genome browser next to the peaks,
+default), against the store's order-0 base composition. Hits of one motif
+that overlap in a peak are collapsed to the best-scoring one (moodspy's
+`remove_overlaps`), so a palindrome's two strands and the shifted copies
+of a low-complexity motif in a G-run count as one site; `overlaps=
+"opposite"` collapses only `+`/`-` pairs and `overlaps=None` keeps every
+placement. A peak can carry several sites or none. Load the BED in a genome browser next to the peaks,
 or intersect it with other annotations.
 
 Two views of the sites, kept apart on purpose. `sites_frame()`,
@@ -234,6 +238,7 @@ sp1 = read_meme("tests/fixtures/MA0079.1_SP1.meme")["MA0079.1"]
 sites = disc.scan(sp1.pwm)              # DataFrame, one row per moodspy site: motif, row, peak, chrom, start, end, strand, score, offset
 sites = disc.scan({"SP1": sp1.pwm, "KLF4": klf4.pwm}, p_cutoff=1e-5)   # several motifs; dict keys name them
 sites = disc.scan(motifs)               # discovered motifs work too (named <round>-<consensus>)
+sites = disc.scan(sp1.pwm, overlaps=None)   # every placement, overlapping hits included
 enr = disc.enrichment(sp1.pwm)          # SEA-style: optimal threshold + Fisher p vs a matched control
 enr.log_pvalue, enr.table               # (primary_above, primary_below, control_above, control_below)
 one = disc.discover(widths=[8, 10])     # a single round of fit, no hold-out

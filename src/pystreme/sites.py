@@ -79,9 +79,11 @@ def find_sites(
     background=None,
     idx=None,
     n_jobs: int | None = None,
+    overlaps: str | None = "any",
 ):
-    """Every placement of each motif, on both strands, whose score reaches
-    the motif's p-value cutoff (moodspy's exact DP threshold).
+    """Placements of each motif, on both strands, whose score reaches the
+    motif's p-value cutoff (moodspy's exact DP threshold), with
+    overlapping hits collapsed to the best-scoring one.
 
     `motifs` is a probability PWM (4, w), a fitted `Motif`, a `MemeMotif`,
     a {name: pwm} dict, or a list of these. `background` is 4 A/C/G/T
@@ -89,6 +91,15 @@ def find_sites(
     `store_background`). `idx` restricts the scan to those rows of
     `store`. Bases that are N or erased in the store never fall inside a
     site.
+
+    `overlaps` is how hits of one motif in one peak that share a base are
+    resolved, with moodspy's `remove_overlaps` (greedy, best score kept,
+    ties to the leftmost and then the `+` strand): `"any"` (default)
+    leaves no two overlapping sites of a motif, which collapses both a
+    palindrome's two strands and the 1-2 bp shifted copies of a
+    low-complexity motif (a GC-box in a G-run), so counts are distinct
+    sites; `"opposite"` collapses only `+`/`-` pairs on one site; `None`
+    keeps every placement.
 
     Returns a DataFrame, one row per site: `motif`, `row` (index into
     `store`), `peak` (interval name), `chrom`, `start`, `end` (the site,
@@ -118,7 +129,11 @@ def find_sites(
         mp.Motif(log_probabilities(pwm) / np.log(2.0) - np.log2(bg)[:, None], name=f"m{k}", kind="log-odds", background=bg)
         for k, (_, pwm) in enumerate(named)
     ]
+    if overlaps not in ("any", "opposite", None):
+        raise ValueError(f"overlaps must be 'any', 'opposite' or None, got {overlaps!r}")
     hits = mp.Scanner(mp_motifs, background=bg, p_cutoff=p_cutoff, n_jobs=n_jobs).scan(seqs)
+    if overlaps is not None:
+        hits = mp.remove_overlaps(hits, strands=overlaps)
 
     names = np.array([n for n, _ in named], dtype=object)
     widths = np.array([pwm.shape[1] for _, pwm in named])
