@@ -222,11 +222,21 @@ class MotifDiscovery:
         store.fit_background(order=bg_order)
         return cls(store, **kwargs)
 
-    def scan(self, motifs, idx=None, p_cutoff: float = DEFAULT_P_CUTOFF, background=None, n_jobs: int | None = None):
+    def scan(
+        self,
+        motifs,
+        idx=None,
+        p_cutoff: float = DEFAULT_P_CUTOFF,
+        background=None,
+        n_jobs: int | None = None,
+        overlaps: str | None = "any",
+    ):
         """Every site of known or discovered motifs in the peaks, with
-        moodspy (MOODS): all placements on both strands whose score reaches
-        `p_cutoff`, so a peak can carry several sites or none. See
-        `pystreme.sites.find_sites` for the arguments and the table.
+        moodspy (MOODS): placements on both strands whose score reaches
+        `p_cutoff`, overlapping hits of a motif collapsed to the best one
+        (`overlaps=None` keeps them all), so a peak can carry several
+        sites or none. See `pystreme.sites.find_sites` for the arguments
+        and the table.
 
         `motifs` is a (4, w) probability PWM, a `Motif` from `fit`, a
         `MemeMotif`, a {name: pwm} dict, or a list of these. Scores are
@@ -236,7 +246,9 @@ class MotifDiscovery:
         """
         from .sites import find_sites
 
-        return find_sites(motifs, self.store, p_cutoff=p_cutoff, background=background, idx=idx, n_jobs=n_jobs)
+        return find_sites(
+            motifs, self.store, p_cutoff=p_cutoff, background=background, idx=idx, n_jobs=n_jobs, overlaps=overlaps
+        )
 
     def _prepare_primary_and_control(
         self, control, idx, bg_order, n_per_seq, seed=None
@@ -694,14 +706,23 @@ class MotifDiscovery:
                 break  # nothing to erase means the next round would find this again
         return motifs
 
-    def to_bed(self, motifs, path, p_cutoff: float = DEFAULT_P_CUTOFF, background=None, n_jobs: int | None = None) -> int:
+    def to_bed(
+        self,
+        motifs,
+        path,
+        p_cutoff: float = DEFAULT_P_CUTOFF,
+        background=None,
+        n_jobs: int | None = None,
+        overlaps: str | None = "any",
+    ) -> int:
         """Write every moodspy site of `motifs` (see `scan`) as BED6:
         genomic coordinates, `motif|peak` name, log2-odds score, strand.
         Returns the number of sites written. `pystreme.results.sites_bed`
         still writes `fit`'s one best window per peak instead."""
         from .sites import write_sites_bed
 
-        return write_sites_bed(self.scan(motifs, p_cutoff=p_cutoff, background=background, n_jobs=n_jobs), path)
+        sites = self.scan(motifs, p_cutoff=p_cutoff, background=background, n_jobs=n_jobs, overlaps=overlaps)
+        return write_sites_bed(sites, path)
 
     def to_meme(self, motifs, path, background: np.ndarray | None = None):
         """Write motifs to MEME minimal format. See `pystreme.meme_io.write_meme`.

@@ -32,7 +32,7 @@ def test_from_bed_scan_returns_moodspy_sites(genome_fasta, peaks_bed):
     pytest.importorskip("moodspy")
     disc = MotifDiscovery.from_bed(peaks_bed, genome_fasta, size=SIZE, bg_order=1)
     pwms = [_random_pwm(4, seed=1), _random_pwm(5, seed=2)]
-    sites = disc.scan(pwms, p_cutoff=1.0)
+    sites = disc.scan(pwms, p_cutoff=1.0, overlaps=None)
     assert set(sites["motif"].cat.categories) == {"motif_1", "motif_2"}
     # p=1: every placement on both strands, except windows touching an N
     n_win = sum(2 * int(valid_windows(disc.store.mask, w).sum()) for w in (4, 5))

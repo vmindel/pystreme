@@ -23,7 +23,8 @@
 | `ValueError: n_per_seq=2 with an explicit control would repeat the same sequences` | `n_per_seq` only multiplies generated controls | supply more control sequences |
 | `disc.scan(...)` scores changed after a `fit`/`enrichment` call (before 2026-11) | those calls overwrote `disc.store`'s background | update; they now work on a view |
 | `disc.scan(pwm).scores` → `AttributeError` / `disc.to_bed(..., passing_only=...)` → `TypeError` | since 2026-11 `disc.scan`/`to_bed` call sites with moodspy and return/write every hit at `p_cutoff` | `pystreme.scanner.scan([pwm], disc.store)` for the old best-window `ScanResult`; `sites_bed(motifs, path, passing_only=False)` for the old BED |
-| `disc.to_bed` line count differs from `sum(m.n_sites)` | moodspy sites (all hits at p < 1e-4, order-0, bits) vs `fit`'s passing best windows (one per peak, order-k, nats) | expected; they answer different questions, see usage guide "Tables, names, figures, files" |
+| `disc.to_bed` line count differs from `sum(m.n_sites)` | moodspy sites (non-overlapping hits at p < 1e-4, order-0, bits; several per peak possible) vs `fit`'s passing best windows (one per peak, order-k, nats) | expected; they answer different questions, see usage guide "Tables, names, figures, files" |
+| site counts per peak double for palindromes, or a GC-box hits 3-4 times in one G-run | `overlaps=None` keeps every placement | leave the default `overlaps="any"` (best hit of each overlapping cluster) |
 | `ImportError: motif sites are called with moodspy` | the `[sites]` extra is not installed | `pip install "moodspy @ git+https://github.com/vmindel/moodspy"` |
 | different motifs on CPU vs GPU, or conv vs gather | fp16 storage in conv, tie-breaks | expected in flank columns / a few percent of sites, not in which motifs |
 | `mkdocs serve` fails with "mkdocstrings not installed" | docs env lacks the plugin | `pip install -r docs/requirements.txt` |

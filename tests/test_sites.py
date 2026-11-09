@@ -57,7 +57,7 @@ def test_sites_match_brute_force(p_cutoff):
     mat = log_probabilities(pwm) / np.log(2.0) - np.log2(bg)[:, None]
     thr = mp.threshold_from_p(mat, p_cutoff, bg)
 
-    sites = find_sites(pwm, store, p_cutoff=p_cutoff)
+    sites = find_sites(pwm, store, p_cutoff=p_cutoff, overlaps=None)
     expected = _brute(pwm, seqs, bg, thr)
     assert len(sites) == len(expected)
     got = {(r, s, st): sc for r, s, st, sc in zip(sites["row"], sites["start"], sites["strand"], sites["score"])}
@@ -98,7 +98,7 @@ def test_n_and_erased_bases_are_never_inside_a_site():
     seqs[0] = seqs[0][:30] + "NNN" + seqs[0][33:]
     store = SequenceStore.from_sequences(seqs)
     store.erase(np.array([1]), np.array([10]), 20)
-    sites = find_sites(_random_pwm(6, seed=6), store, p_cutoff=1.0)
+    sites = find_sites(_random_pwm(6, seed=6), store, p_cutoff=1.0, overlaps=None)
     s0 = sites[sites["row"] == 0]
     assert not ((s0["start"] < 33) & (s0["end"] > 30)).any()
     s1 = sites[sites["row"] == 1]
@@ -134,3 +134,55 @@ def test_disc_scan_and_to_bed(tmp_path):
     assert [(l[0], int(l[1])) for l in lines] == sorted((l[0], int(l[1])) for l in lines)
     assert {l[3].split("|")[0] for l in lines} == {"a", "b"}
     assert write_sites_bed(sites, tmp_path / "unsorted.bed", sort=False) == n
+
+
+def _overlapping_pairs(df, opposite_only):
+    out = []
+    for _, g in df.groupby(["motif", "row"], observed=True):
+        g = g.sort_values("start")
+        s, e, st, sc = (g[c].to_numpy() for c in ("start", "end", "strand", "score"))
+        for i in range(len(g)):
+            for j in range(i + 1, len(g)):
+                if s[j] >= e[i]:
+                    break
+                if not opposite_only or st[i] != st[j]:
+                    out.append((sc[i], sc[j]))
+    return out
+
+
+@pytest.mark.parametrize("overlaps", ["any", "opposite"])
+def test_overlaps_are_collapsed_to_the_best_hit(overlaps):
+    # an exact palindrome (matches one site on both strands) and a tandem
+    # GC-box (copies 5 bp apart overlap on the same strand)
+    seqs = _random_seqs(40, 80, seed=12)
+    seqs = [s[:10] + "GTCACGTGAC" + s[20:40] + "GGGGCGGGGCGGGGCGGGGC" + s[60:] for s in seqs]
+    store = SequenceStore.from_sequences(seqs)
+
+    def sharp(word):
+        m = np.full((4, len(word)), 0.03)
+        for j, b in enumerate(word):
+            m["ACGT".index(b), j] = 0.91
+        return m
+
+    pwm = {"ebox": sharp("GTCACGTGAC"), "gc": sharp("GGGGCGGGGC")}
+    raw = find_sites(pwm, store, p_cutoff=1e-3, overlaps=None)
+    kept = find_sites(pwm, store, p_cutoff=1e-3, overlaps=overlaps)
+    assert len(kept) < len(raw)
+    assert _overlapping_pairs(raw, opposite_only=(overlaps == "opposite"))
+    assert not _overlapping_pairs(kept, opposite_only=(overlaps == "opposite"))
+    # every peak with a hit keeps its best one
+    best_raw = raw.groupby(["motif", "row"], observed=True)["score"].max()
+    best_kept = kept.groupby(["motif", "row"], observed=True)["score"].max()
+    pd = pytest.importorskip("pandas")
+    pd.testing.assert_series_equal(best_raw, best_kept)
+    # nothing is dropped unless it overlaps a kept hit that scores at least as well
+    k = set(zip(kept["row"], kept["start"], kept["strand"]))
+    for r in raw.itertuples(index=False):
+        if (r.row, r.start, r.strand) in k:
+            continue
+        same = kept[(kept["motif"] == r.motif) & (kept["row"] == r.row) & (kept["start"] < r.end) & (kept["end"] > r.start)]
+        if overlaps == "opposite":
+            same = same[same["strand"] != r.strand]
+        assert (same["score"] >= r.score - 1e-12).any()
+    with pytest.raises(ValueError, match="overlaps"):
+        find_sites(pwm, store, overlaps="both")
