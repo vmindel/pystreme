@@ -15,7 +15,7 @@ jobs:
       - name: Install CPU torch
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Install pystreme
-        run: pip install -e ".[io,tables,plot,dev]"
+        run: pip install -e ".[io,tables,plot,sites,dev]"
       - name: Run tests (GPU tests skip themselves)
         run: pytest -q
       - name: Null-calibration tests

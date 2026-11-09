@@ -27,6 +27,8 @@ io = ["pyfaidx>=0.7", "numba>=0.58"]
 # Result tables (pystreme.results) and logo/positional plotting (Phase 5).
 tables = ["pandas>=2.0"]
 plot = ["logomaker>=0.8", "matplotlib>=3.7", "pandas>=2.0"]
+# Site calling (`disc.scan`, `disc.to_bed`, `pystreme.sites`): moodspy, the MOODS port.
+sites = ["moodspy @ git+https://github.com/vmindel/moodspy", "pandas>=2.0"]
 dev = [
     "pytest>=7.0",
     "pytest-benchmark>=4.0",
@@ -37,6 +39,9 @@ docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5", "mkdocstrings[python]>=0.26"]
 [project.urls]
 Homepage = "https://github.com/vmindel/pystreme"
 Issues = "https://github.com/vmindel/pystreme/issues"
+
+[tool.hatch.metadata]
+allow-direct-references = true  # moodspy is installed from GitHub
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pystreme"]

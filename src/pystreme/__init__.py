@@ -9,7 +9,8 @@ it returns, and the table/annotation helpers in `pystreme.results`.
 from .discovery import Motif, MotifDiscovery
 from .results import annotate, sites_bed, sites_frame, sort_by_pvalue, summary
 from .sequence_store import SequenceStore
+from .sites import find_sites
 
 __version__ = "0.1.0"
 
-__all__ = ["Motif", "MotifDiscovery", "SequenceStore", "annotate", "sites_bed", "sites_frame", "sort_by_pvalue", "summary", "__version__"]
+__all__ = ["Motif", "MotifDiscovery", "SequenceStore", "annotate", "find_sites", "sites_bed", "sites_frame", "sort_by_pvalue", "summary", "__version__"]

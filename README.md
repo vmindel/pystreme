@@ -39,8 +39,11 @@ transcription factor. About a minute for ten motifs in 7,000 peaks.
 - **Everything in Python:** `Motif` objects, pandas tables, database
   annotation (e.g. HOCOMOCO), sequence logos, BED and MEME-format export.
   No subprocess, no HTML to parse.
-- **Useful pieces on their own:** a batched PWM scanner and a SEA-style
-  enrichment test for known motifs.
+- **Sites called with [moodspy](https://github.com/vmindel/moodspy):**
+  `disc.scan`/`disc.to_bed` report every match of a motif, known or
+  discovered, at an exact p-value cutoff (MOODS), not just one per peak.
+- **Useful pieces on their own:** a batched best-window PWM scanner and a
+  SEA-style enrichment test for known motifs.
 
 ## Install
 
@@ -49,7 +52,7 @@ matches your GPU first ([pytorch.org](https://pytorch.org/get-started/locally/))
 then:
 
 ```bash
-pip install "pystreme[io,tables,plot] @ git+https://github.com/vmindel/pystreme"
+pip install "pystreme[io,tables,plot,sites] @ git+https://github.com/vmindel/pystreme"
 ```
 
 To reproduce the exact environment it was validated in (Python 3.10, torch
@@ -68,7 +71,7 @@ motifs = disc.fit(n_motifs=10, verbose=True)
 summary(motifs)                                      # one row per motif
 ann = annotate(motifs, "H12CORE_meme_format.meme")   # closest known factors
 plot.report(motifs, annotation=ann)                  # logos + position histograms
-disc.to_bed(motifs, "sites.bed")                     # every site, genome coordinates
+disc.to_bed(motifs, "sites.bed")                     # every site (moodspy, p < 1e-4), genome coordinates
 disc.to_meme(motifs, "motifs.meme")                  # for Tomtom, FIMO, HOMER
 ```
 

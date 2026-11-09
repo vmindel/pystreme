@@ -14,6 +14,12 @@
     options:
       members: [DinucShuffle, GCMatched, Explicit, resolve_control]
 
+## `pystreme.sites`
+
+::: pystreme.sites
+    options:
+      members: [find_sites, write_sites_bed, store_background]
+
 ## `pystreme.scanner`
 
 ::: pystreme.scanner

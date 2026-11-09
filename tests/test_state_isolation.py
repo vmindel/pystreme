@@ -13,6 +13,7 @@ import numpy as np
 import torch
 
 from pystreme import MotifDiscovery
+from pystreme.scanner import scan
 from pystreme.sequence_store import SequenceStore
 
 
@@ -50,7 +51,7 @@ def test_fit_discover_and_enrichment_leave_the_store_background_alone():
     snap = _snapshot(store)
     codes = store.codes.clone()
     pwm = np.full((4, 8), 0.25)
-    scores_before = disc.scan(pwm, kernel="conv").scores.clone()
+    scores_before = scan([pwm], disc.store, kernel="conv").scores.clone()
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -61,7 +62,7 @@ def test_fit_discover_and_enrichment_leave_the_store_background_alone():
 
     _assert_unchanged(store, snap)
     torch.testing.assert_close(store.codes, codes)  # and nothing was erased in it
-    torch.testing.assert_close(disc.scan(pwm, kernel="conv").scores, scores_before)
+    torch.testing.assert_close(scan([pwm], disc.store, kernel="conv").scores, scores_before)
 
 
 def test_to_meme_background_does_not_depend_on_call_history(tmp_path):

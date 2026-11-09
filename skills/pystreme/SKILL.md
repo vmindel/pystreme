@@ -35,11 +35,11 @@ motifs = disc.fit(n_motifs=10)            # list[Motif], discovery order (only r
 summary(motifs)                            # DataFrame: name, width, n_sites, train/holdout/central log p ...
 ann = annotate(motifs, "H12CORE_meme_format.meme", top=3)   # name them (HOCOMOCO v12, in-process Tomtom-style)
 motifs[0].sites_frame()                    # per-peak best site, genome coordinates, strand, passing
-disc.to_bed(motifs, "sites.bed")           # BED6 of every passing site
+disc.to_bed(motifs, "sites.bed")           # BED6 of every moodspy site, p < 1e-4 (bits, order-0 bg)
 disc.to_meme(motifs, "motifs.meme")        # for Tomtom / FIMO
 plot.report(motifs, annotation=ann)        # logo + positional histogram per motif, most significant first
 
-hit = disc.scan(pwm)                       # best score/position/strand per peak for a known PWM
+sites = disc.scan(pwm)                     # DataFrame, every moodspy site of a known PWM (or of `motifs`)
 enr = disc.enrichment(pwm)                 # SEA-style enrichment of a known PWM vs matched control
 ```
 
