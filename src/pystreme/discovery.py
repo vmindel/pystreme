@@ -22,6 +22,7 @@ from .refine import RefinedMotif, column_information, extend_flanks, refine as _
 from .scanner import ScanResult, scan as _scan
 from .seeds import top_seeds as _top_seeds
 from .sequence_store import SequenceStore
+from .sites import DEFAULT_P_CUTOFF
 from .statistics import (
     CentralEnrichment,
     DecoyCentralEnrichment,
@@ -221,21 +222,21 @@ class MotifDiscovery:
         store.fit_background(order=bg_order)
         return cls(store, **kwargs)
 
-    def scan(self, pwm, idx=None, revcomp: bool | None = None, kernel: str = "auto"):
-        """Standalone PWM scanner (§"Phase 1" deliverable). See `pystreme.scanner.scan`.
+    def scan(self, motifs, idx=None, p_cutoff: float = DEFAULT_P_CUTOFF, background=None, n_jobs: int | None = None):
+        """Every site of known or discovered motifs in the peaks, with
+        moodspy (MOODS): all placements on both strands whose score reaches
+        `p_cutoff`, so a peak can carry several sites or none. See
+        `pystreme.sites.find_sites` for the arguments and the table.
 
-        `pwm` is a single (4, w) probability matrix, or a list of them for a
-        batched multi-motif scan. A single pwm returns squeezed (n_seqs,)
-        tensors instead of scanner.scan's (1, n_seqs); a list returns the
-        full `ScanResult` with the motif axis intact.
+        `motifs` is a (4, w) probability PWM, a `Motif` from `fit`, a
+        `MemeMotif`, a {name: pwm} dict, or a list of these. Scores are
+        log2 odds against the store's order-0 marginals; the best-window
+        scorer `fit` uses internally (order-k background, one window per
+        peak) is still `pystreme.scanner.scan(pwms, disc.store)`.
         """
-        revcomp = self.revcomp if revcomp is None else revcomp
-        single = isinstance(pwm, np.ndarray) and pwm.ndim == 2
-        pwms = [pwm] if single else pwm
-        result = _scan(pwms, self.store, idx=idx, revcomp=revcomp, kernel=kernel)
-        if single:
-            return ScanResult(result.scores[0], result.positions[0], result.strands[0])
-        return result
+        from .sites import find_sites
+
+        return find_sites(motifs, self.store, p_cutoff=p_cutoff, background=background, idx=idx, n_jobs=n_jobs)
 
     def _prepare_primary_and_control(
         self, control, idx, bg_order, n_per_seq, seed=None
@@ -693,12 +694,14 @@ class MotifDiscovery:
                 break  # nothing to erase means the next round would find this again
         return motifs
 
-    def to_bed(self, motifs, path, passing_only: bool = True) -> int:
-        """Write the motifs' sites as BED6 (genomic coordinates, motif|peak
-        name, log-odds score, strand). See `pystreme.results.sites_bed`."""
-        from .results import sites_bed
+    def to_bed(self, motifs, path, p_cutoff: float = DEFAULT_P_CUTOFF, background=None, n_jobs: int | None = None) -> int:
+        """Write every moodspy site of `motifs` (see `scan`) as BED6:
+        genomic coordinates, `motif|peak` name, log2-odds score, strand.
+        Returns the number of sites written. `pystreme.results.sites_bed`
+        still writes `fit`'s one best window per peak instead."""
+        from .sites import write_sites_bed
 
-        return sites_bed(motifs, path, passing_only=passing_only)
+        return write_sites_bed(self.scan(motifs, p_cutoff=p_cutoff, background=background, n_jobs=n_jobs), path)
 
     def to_meme(self, motifs, path, background: np.ndarray | None = None):
         """Write motifs to MEME minimal format. See `pystreme.meme_io.write_meme`.

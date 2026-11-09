@@ -67,11 +67,18 @@ def _pick_best(fwd: torch.Tensor, rc: torch.Tensor | None):
     return score, pos, strand
 
 
-def _to_log_pwm(pwm: np.ndarray, eps: float = 1e-4) -> torch.Tensor:
-    """Probability PWM (4, w) -> log-probability kernel, clipped to avoid log(0)."""
+def log_probabilities(pwm: np.ndarray, eps: float = 1e-4) -> np.ndarray:
+    """Probability PWM (4, w) -> natural-log probabilities (float64), clipped
+    at `eps` and renormalised to avoid log(0). Shared with `sites.find_sites`
+    so both scanners score the same matrix."""
     pwm = np.clip(np.asarray(pwm, dtype=np.float64), eps, 1.0)
     pwm = pwm / pwm.sum(axis=0, keepdims=True)
-    return torch.from_numpy(np.log(pwm)).to(torch.float32)
+    return np.log(pwm)
+
+
+def _to_log_pwm(pwm: np.ndarray, eps: float = 1e-4) -> torch.Tensor:
+    """Probability PWM (4, w) -> log-probability kernel, clipped to avoid log(0)."""
+    return torch.from_numpy(log_probabilities(pwm, eps)).to(torch.float32)
 
 
 def _default_kernel(device: torch.device) -> str:
