@@ -69,8 +69,8 @@ def test_sites_bed_writes_passing_sites_in_bed6(fitted, tmp_path):
     widths = {m.name: m.width for m in motifs}
     assert all(int(l[2]) - int(l[1]) == widths[l[3].split("|")[0]] for l in lines)
     assert {l[5] for l in lines} <= {"+", "-"}
-    # every peak's best window when passing_only=False; MotifDiscovery.to_bed delegates
-    n_all = disc.to_bed(motifs, path, passing_only=False)
+    # every peak's best window when passing_only=False
+    n_all = sites_bed(motifs, path, passing_only=False)
     assert n_all == len(motifs) * disc.store.n_seqs
 
 

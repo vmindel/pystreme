@@ -14,7 +14,7 @@ import torch
 from pystreme.control import GCMatched
 from pystreme.discovery import MotifDiscovery
 from pystreme.meme_io import read_meme
-from pystreme.scanner import ScanResult, scan
+from pystreme.scanner import valid_windows
 from pystreme.sequence_store import SequenceStore
 
 from conftest import SIZE
@@ -26,35 +26,19 @@ def _random_pwm(width, seed):
     return raw / raw.sum(axis=0, keepdims=True)
 
 
-def test_from_bed_scan_single_pwm_matches_raw_scanner(genome_fasta, peaks_bed):
-    disc = MotifDiscovery.from_bed(peaks_bed, genome_fasta, size=SIZE, bg_order=1)
-    pwm = _random_pwm(4, seed=0)
-
-    result = disc.scan(pwm)
-    assert isinstance(result, ScanResult)
-    assert result.scores.ndim == 1  # squeezed: no leading motif axis for a single pwm
-    assert result.scores.shape[0] == disc.store.n_seqs
-
-    raw = scan([pwm], disc.store)
-    torch.testing.assert_close(result.scores, raw.scores[0])
-    torch.testing.assert_close(result.positions, raw.positions[0])
-
-
-def test_scan_list_of_pwms_keeps_motif_axis(genome_fasta, peaks_bed):
+def test_from_bed_scan_returns_moodspy_sites(genome_fasta, peaks_bed):
+    """`disc.scan` is the moodspy site caller (tests/test_sites.py checks
+    its hits); here only that it is wired to the store and its intervals."""
+    pytest.importorskip("moodspy")
     disc = MotifDiscovery.from_bed(peaks_bed, genome_fasta, size=SIZE, bg_order=1)
     pwms = [_random_pwm(4, seed=1), _random_pwm(5, seed=2)]
-
-    result = disc.scan(pwms)
-    assert result.scores.shape == (2, disc.store.n_seqs)
-
-
-def test_scan_idx_forwarded(genome_fasta, peaks_bed):
-    disc = MotifDiscovery.from_bed(peaks_bed, genome_fasta, size=SIZE, bg_order=1)
-    pwm = _random_pwm(4, seed=3)
-    idx = torch.tensor([0, disc.store.n_seqs - 1])
-
-    result = disc.scan(pwm, idx=idx)
-    assert result.scores.shape[0] == 2
+    sites = disc.scan(pwms, p_cutoff=1.0, overlaps=None)
+    assert set(sites["motif"].cat.categories) == {"motif_1", "motif_2"}
+    # p=1: every placement on both strands, except windows touching an N
+    n_win = sum(2 * int(valid_windows(disc.store.mask, w).sum()) for w in (4, 5))
+    assert len(sites) == n_win
+    ivs = disc.store.intervals
+    assert all(ivs[r].start <= s < ivs[r].end for r, s in zip(sites["row"], sites["start"]))
 
 
 def test_to_meme_roundtrip(tmp_path):

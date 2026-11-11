@@ -185,7 +185,7 @@ plot.report(motifs, annotation=ann)   # logo + positional histogram per motif, m
                                       # ann = annotate(...) puts the best database match in each title
 plot.logo(motifs[0]); plot.positions(motifs[0])
 disc.to_meme(motifs, "motifs.meme")   # MEME minimal format, for Tomtom/FIMO/gimmemotifs
-disc.to_bed(motifs, "sites.bed")      # BED6 of every passing site: chrom start end motif|peak score strand
+disc.to_bed(motifs, "sites.bed")      # BED6 of every moodspy site (p < 1e-4): chrom start end motif|peak score strand
 ```
 
 `fit` returns motifs in discovery order (one per round). That order is
@@ -196,10 +196,25 @@ re-test is noisy. `plot.report` therefore sorts by hold-out p by default
 and `sort_by_pvalue(motifs)` do the same for tables and lists. Names keep
 their round prefix, so `3-GCGCNTGCGCA` is still round 3 wherever it sits.
 
-The BED has one line per (motif, peak): that motif's best site in that
-peak, in genome coordinates, only where it clears the motif's threshold
-(`passing_only=False` for every peak's best window). Load it in a genome
-browser next to the peaks, or intersect it with other annotations.
+Sites are called with [moodspy](https://github.com/vmindel/moodspy), the
+MOODS port: every placement on either strand whose log2-odds score reaches
+the motif's exact p-value cutoff (`p_cutoff=1e-4` by default, FIMO's
+default), against the store's order-0 base composition. Hits of one motif
+that overlap in a peak are collapsed to the best-scoring one (moodspy's
+`remove_overlaps`), so a palindrome's two strands and the shifted copies
+of a low-complexity motif in a G-run count as one site; `overlaps=
+"opposite"` collapses only `+`/`-` pairs and `overlaps=None` keeps every
+placement. A peak can carry several sites or none. Load the BED in a genome browser next to the peaks,
+or intersect it with other annotations.
+
+Two views of the sites, kept apart on purpose. `sites_frame()`,
+`n_sites`, `positions` and the central-enrichment tests are `fit`'s own:
+one best window per peak, scored in nats against the order-k background,
+cut at the threshold `fit` chose. `disc.scan`/`disc.to_bed` are the
+moodspy calls, for reporting and downstream overlap. Their scores are in
+bits against an order-0 background, so they are not comparable with
+`Motif.threshold`. `pystreme.sites_bed(motifs, path)` still writes `fit`'s
+one-per-peak view as BED.
 
 `plot.report(motifs, annotation=ann)` on the first 2000 SP1 ChEC-seq peaks (the
 run recorded in the benchmarks), most significant first, with the HOCOMOCO
@@ -220,15 +235,22 @@ how).
 from pystreme.meme_io import read_meme
 sp1 = read_meme("tests/fixtures/MA0079.1_SP1.meme")["MA0079.1"]
 
-hit = disc.scan(sp1.pwm)                # ScanResult: best score/position/strand per peak (both strands)
-hit = disc.scan([pwm_a, pwm_b])         # batched, motif axis kept
+sites = disc.scan(sp1.pwm)              # DataFrame, one row per moodspy site: motif, row, peak, chrom, start, end, strand, score, offset
+sites = disc.scan({"SP1": sp1.pwm, "KLF4": klf4.pwm}, p_cutoff=1e-5)   # several motifs; dict keys name them
+sites = disc.scan(motifs)               # discovered motifs work too (named <round>-<consensus>)
+sites = disc.scan(sp1.pwm, overlaps=None)   # every placement, overlapping hits included
 enr = disc.enrichment(sp1.pwm)          # SEA-style: optimal threshold + Fisher p vs a matched control
 enr.log_pvalue, enr.table               # (primary_above, primary_below, control_above, control_below)
 one = disc.discover(widths=[8, 10])     # a single round of fit, no hold-out
 ```
 
-Scores are log-odds in nats against the order-`bg_order` background;
-`-inf` marks a sequence with no valid window (all-N).
+`disc.scan` scores are log2 odds (bits) against the store's order-0
+marginals (`background=` overrides them); windows touching an N never
+match. `enrichment` and `discover` score in nats against the
+order-`bg_order` background, as `fit` does. That best-window scorer is
+still available directly: `pystreme.scanner.scan([pwm], disc.store)`
+returns a `ScanResult` (best score/position/strand per peak), with `-inf`
+for a sequence with no valid window.
 
 ## Reproducing the benchmark
 

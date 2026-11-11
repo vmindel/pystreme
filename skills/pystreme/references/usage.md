@@ -73,20 +73,27 @@ a quick "what's the top motif" with only a training p-value.
 ```python
 from pystreme.meme_io import read_meme
 pwm = read_meme("motifs.meme")["MA0079.1"].pwm        # (4, w) probabilities, rows ACGT
-hit = disc.scan(pwm)                                   # ScanResult: .scores/.positions/.strands, one per peak
-hits = disc.scan([pwm_a, pwm_b])                       # batched; motif axis kept
+sites = disc.scan(pwm)                                 # DataFrame: motif,row,peak,chrom,start,end,strand,score,offset
+sites = disc.scan({"SP1": pwm_a, "KLF4": pwm_b}, p_cutoff=1e-5)   # names from dict keys; Motif lists work too
 enr = disc.enrichment(pwm, control="dinuc_shuffle")   # ThresholdResult: .threshold .log_pvalue .table
 ```
 
-Scores are log-odds in nats vs the order-`bg_order` background; `-inf`
-means no valid window (all-N peak).
+`disc.scan` calls sites with moodspy (MOODS): placements on either
+strand at `p_cutoff` (default 1e-4), overlapping hits of a motif collapsed
+to the best one (`overlaps="any"`; `"opposite"` = strand pairs only;
+`None` = keep all), scores in log2 bits against the
+store's order-0 marginals. `enrichment`/`fit` score in nats against the
+order-`bg_order` background; the best-window scanner they use is
+`pystreme.scanner.scan([pwm], disc.store)` -> `ScanResult`.
 
 ## Outputs
 
 - `summary(motifs)` → DataFrame; `motif.sites_frame()` → per-peak table
   (chrom/start/end/name, score, site_start/site_end, strand, offset,
-  passing); `disc.to_bed(motifs, path)` → BED6 of passing sites
-  (`motif|peak` names, score in nats, strand); `disc.to_meme(motifs, path)`.
+  passing; `fit`'s one-best-window-per-peak view); `disc.to_bed(motifs, path,
+  p_cutoff=1e-4)` → BED6 of every moodspy site (`motif|peak` names, score
+  in bits, strand); `sites_bed(motifs, path)` → BED6 of `fit`'s passing
+  best windows (score in nats); `disc.to_meme(motifs, path)`.
 - `annotate(motifs, db, top=3)` → DataFrame of best database matches by
   Tomtom's Pearson metric (sum of per-column r over the best alignment; no
   p-value). HOCOMOCO v12 core (`H12CORE_meme_format.meme`, from the HOCOMOCO website); JASPAR

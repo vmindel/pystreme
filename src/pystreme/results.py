@@ -121,6 +121,10 @@ def sites_bed(motifs, path, passing_only: bool = True, sort: bool = True) -> int
     `passing_only=False` writes every peak's best window. Returns the
     number of lines written. Sorted by chromosome and start unless
     `sort=False` (then motif order, peak order).
+
+    This is `fit`'s own view of the sites (one per peak, the ones `n_sites`
+    and the positional tests count). For every match in each peak at a
+    p-value, called with moodspy, use `MotifDiscovery.to_bed`.
     """
     if not isinstance(motifs, (list, tuple)):
         motifs = [motifs]
