@@ -34,7 +34,7 @@ def _moodspy():
     except ImportError as exc:  # pragma: no cover - environment-dependent
         raise ImportError(
             "motif sites are called with moodspy: "
-            "`pip install \"moodspy @ git+https://github.com/vmindel/moodspy\"` "
+            "`pip install \"moodspy @ git+https://github.com/vmindel/moodspy@fd476752662d89363f2fdf3804f678653287e783\"` "
             "(or install pystreme with the [sites] extra)"
         ) from exc
     return moodspy

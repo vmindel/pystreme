@@ -28,7 +28,8 @@ io = ["pyfaidx>=0.7", "numba>=0.58"]
 tables = ["pandas>=2.0"]
 plot = ["logomaker>=0.8", "matplotlib>=3.7", "pandas>=2.0"]
 # Site calling (`disc.scan`, `disc.to_bed`, `pystreme.sites`): moodspy, the MOODS port.
-sites = ["moodspy @ git+https://github.com/vmindel/moodspy", "pandas>=2.0"]
+# pinned to a moodspy commit so site calls only change when this line does
+sites = ["moodspy @ git+https://github.com/vmindel/moodspy@fd476752662d89363f2fdf3804f678653287e783", "pandas>=2.0"]
 dev = [
     "pytest>=7.0",
     "pytest-benchmark>=4.0",
