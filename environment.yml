@@ -38,5 +38,6 @@ dependencies:
       - mkdocs>=1.6,<2
       - mkdocs-material>=9.5
       - mkdocstrings[python]>=0.26
+      - pymdown-extensions<12  # 12.x breaks mkdocstrings 1.0.6, the newest for Python 3.10
       - pytest>=8.0
       - pytest-benchmark>=4.0
