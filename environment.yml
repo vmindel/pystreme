@@ -34,7 +34,7 @@ dependencies:
       - logomaker>=0.8
       - matplotlib>=3.7
       - pandas>=2.0
-      - moodspy @ git+https://github.com/vmindel/moodspy
+      - moodspy @ git+https://github.com/vmindel/moodspy@fd476752662d89363f2fdf3804f678653287e783
       - mkdocs>=1.6,<2
       - mkdocs-material>=9.5
       - mkdocstrings[python]>=0.26
