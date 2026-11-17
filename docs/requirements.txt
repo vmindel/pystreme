@@ -5,3 +5,7 @@
 mkdocs>=1.6,<2
 mkdocs-material>=9.5,<10
 mkdocstrings[python]>=0.26
+# On Python 3.10 pip can only get mkdocstrings 1.0.6, which breaks on
+# pymdown-extensions 12 ("Highlight.__init__() missing ... 'md'"); 11.x works.
+# Newer Pythons get releases that work together, so they are left alone.
+pymdown-extensions<12; python_version < "3.11"
